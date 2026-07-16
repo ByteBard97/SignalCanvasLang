@@ -135,8 +135,10 @@ fn rebuild_input_from_load(loaded: &CanvasLoadOutput) -> CanvasEmitInput {
             RouteRuleEmitInput {
                 from_interface: r.from_port.clone(),
                 from_channel: r.from_channel,
+                from_instance: r.from_instance.clone(),
                 to_interface: r.to_port.clone(),
                 to_channel: r.to_channel,
+                to_instance: r.to_instance.clone(),
             }
         }).collect();
 
@@ -144,8 +146,10 @@ fn rebuild_input_from_load(loaded: &CanvasLoadOutput) -> CanvasEmitInput {
             RouteRuleEmitInput {
                 from_interface: r.from_port.clone(),
                 from_channel: r.from_channel,
+                from_instance: r.from_instance.clone(),
                 to_interface: r.to_port.clone(),
                 to_channel: r.to_channel,
+                to_instance: r.to_instance.clone(),
             }
         }).collect();
 

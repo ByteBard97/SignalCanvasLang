@@ -95,8 +95,15 @@ pub struct ChannelLabelOutput {
 pub struct RouteRuleOutput {
     pub from_port: String,
     pub from_channel: u32,
+    /// Owning instance of the `from` port when it's a cross-instance reference
+    /// (e.g. a Backbone-paired Engine↔Surface route). `None` for same-instance.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub from_instance: Option<String>,
     pub to_port: String,
     pub to_channel: u32,
+    /// Owning instance of the `to` port when it's a cross-instance reference.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub to_instance: Option<String>,
 }
 
 #[derive(Debug, Serialize, TS)]

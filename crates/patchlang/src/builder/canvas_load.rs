@@ -237,8 +237,10 @@ pub fn load_from_patch(patch_source: &str, _layout_json: &str) -> Result<CanvasL
             RouteRuleOutput {
                 from_port: b.source.port.clone(),
                 from_channel,
+                from_instance: b.source.instance.clone(),
                 to_port: b.target.port.clone(),
                 to_channel,
+                to_instance: b.target.instance.clone(),
             }
         }).collect();
 
@@ -249,8 +251,10 @@ pub fn load_from_patch(patch_source: &str, _layout_json: &str) -> Result<CanvasL
             RouteRuleOutput {
                 from_port: r.source.port.clone(),
                 from_channel,
+                from_instance: r.source.instance.clone(),
                 to_port: r.target.port.clone(),
                 to_channel,
+                to_instance: r.target.instance.clone(),
             }
         }).collect();
 

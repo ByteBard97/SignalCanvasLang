@@ -4,5 +4,8 @@ mod integration_tests;
 mod property_tests;
 mod fixture_tests;
 mod library_tests;
+mod canvas_test_helpers;
 mod canvas_roundtrip_tests;
+mod canvas_stream_route_tests;
+mod canvas_bus_route_tests;
 mod canvas_load_tests;

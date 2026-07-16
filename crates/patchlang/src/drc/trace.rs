@@ -205,13 +205,26 @@ fn build_edge_map(program: &PatchProgram, ctx: &DRCContext<'_>) -> HashMap<PortK
         }
     }
 
-    // Instance routes.
+    // Instance routes. An endpoint may carry a cross-instance qualifier
+    // (Backbone-paired Engine↔Surface routing); when present the edge node must
+    // be keyed on that referenced instance, not the route's owning instance, so
+    // reachability follows the real signal path (issue #28).
     for (inst_name, inst) in &ctx.instance_map {
         for route in &inst.routes {
+            let src_inst = route
+                .source
+                .instance
+                .clone()
+                .unwrap_or_else(|| inst_name.to_string());
+            let tgt_inst = route
+                .target
+                .instance
+                .clone()
+                .unwrap_or_else(|| inst_name.to_string());
             edges
-                .entry((inst_name.to_string(), route.source.port.clone()))
+                .entry((src_inst, route.source.port.clone()))
                 .or_default()
-                .push((inst_name.to_string(), route.target.port.clone()));
+                .push((tgt_inst, route.target.port.clone()));
         }
     }
 

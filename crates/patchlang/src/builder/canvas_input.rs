@@ -103,8 +103,16 @@ pub struct ChannelLabelEmitInput {
 pub struct RouteRuleEmitInput {
     pub from_interface: String,
     pub from_channel: u32,
+    /// Optional owning instance of the `from` port. `None` = the instance that
+    /// owns this route (same-instance route). `Some(name)` = a paired/other
+    /// instance, e.g. a Backbone-paired Engine↔Surface cross-instance route.
+    #[serde(default)]
+    pub from_instance: Option<String>,
     pub to_interface: String,
     pub to_channel: u32,
+    /// Optional owning instance of the `to` port. See `from_instance`.
+    #[serde(default)]
+    pub to_instance: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, TS)]
