@@ -8,4 +8,6 @@ mod canvas_test_helpers;
 mod canvas_roundtrip_tests;
 mod canvas_stream_route_tests;
 mod canvas_bus_route_tests;
+mod canvas_load_helpers;
 mod canvas_load_tests;
+mod canvas_load_crossdevice_tests;
