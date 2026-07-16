@@ -107,11 +107,13 @@ pub struct RouteRuleEmitInput {
     /// owns this route (same-instance route). `Some(name)` = a paired/other
     /// instance, e.g. a Backbone-paired Engine↔Surface cross-instance route.
     #[serde(default)]
+    #[ts(optional)]
     pub from_instance: Option<String>,
     pub to_interface: String,
     pub to_channel: u32,
     /// Optional owning instance of the `to` port. See `from_instance`.
     #[serde(default)]
+    #[ts(optional)]
     pub to_instance: Option<String>,
 }
 
@@ -184,4 +186,21 @@ pub struct CardEmitInput {
     pub model: String,
     pub fits: String,
     pub interfaces: Vec<InterfaceEmitInput>,
+}
+
+#[cfg(test)]
+mod ts_binding_tests {
+    use super::*;
+    use ts_rs::TS;
+
+    #[test]
+    fn route_emit_input_instance_fields_are_ts_optional() {
+        // The emit-input instance qualifiers are #[serde(default)] (omittable),
+        // so the generated TS type must be `field?: T`, matching the output side.
+        let decl = RouteRuleEmitInput::decl();
+        assert!(
+            decl.contains("from_instance?:") && decl.contains("to_instance?:"),
+            "expected optional instance fields, got:\n{decl}"
+        );
+    }
 }

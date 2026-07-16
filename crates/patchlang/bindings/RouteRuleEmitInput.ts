@@ -6,8 +6,8 @@ export type RouteRuleEmitInput = { from_interface: string, from_channel: number,
  * owns this route (same-instance route). `Some(name)` = a paired/other
  * instance, e.g. a Backbone-paired Engine↔Surface cross-instance route.
  */
-from_instance: string | null, to_interface: string, to_channel: number, 
+from_instance?: string, to_interface: string, to_channel: number, 
 /**
  * Optional owning instance of the `to` port. See `from_instance`.
  */
-to_instance: string | null, };
+to_instance?: string, };
