@@ -3,4 +3,4 @@
 /**
  * An edge between two ports.
  */
-export type GraphEdge = { id: string, sourceNode: string, sourcePort: string, targetNode: string, targetPort: string, edgeType: string, properties: { [key in string]?: string }, busId: string | null, busIndex: number | null, busSize: number | null, };
+export type GraphEdge = { id: string, sourceNode: string, sourcePort: string, targetNode: string, targetPort: string, edgeType: string, properties: { [key in string]?: string }, busId?: string, busIndex?: number, busSize?: number, };

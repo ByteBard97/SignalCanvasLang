@@ -98,11 +98,13 @@ pub struct RouteRuleOutput {
     /// Owning instance of the `from` port when it's a cross-instance reference
     /// (e.g. a Backbone-paired Engine↔Surface route). `None` for same-instance.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub from_instance: Option<String>,
     pub to_port: String,
     pub to_channel: u32,
     /// Owning instance of the `to` port when it's a cross-instance reference.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub to_instance: Option<String>,
 }
 
@@ -121,6 +123,7 @@ pub struct BusOutput {
 pub struct BusNamedOutput {
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub output_instance: Option<String>,
     pub output_port: String,
     pub output_channels: Vec<u32>,
@@ -199,4 +202,23 @@ pub struct NetworkMemberLoadOutput {
     pub instance_name: String,
     pub port_group: Option<String>,
     pub slot_index: Option<u32>,
+}
+
+#[cfg(test)]
+mod ts_binding_tests {
+    use super::*;
+    use ts_rs::TS;
+
+    #[test]
+    fn skip_serialized_option_fields_are_ts_optional() {
+        // Fields serde omits when None (skip_serializing_if) must be TS-optional
+        // (`field?: T`), not always-present (`field: T | null`). See issue #28
+        // follow-up: ts-rs ignores skip_serializing_if, so #[ts(optional)] is
+        // required for binding fidelity.
+        let decl = RouteRuleOutput::decl();
+        assert!(
+            decl.contains("from_instance?:") && decl.contains("to_instance?:"),
+            "expected optional instance fields, got:\n{decl}"
+        );
+    }
 }

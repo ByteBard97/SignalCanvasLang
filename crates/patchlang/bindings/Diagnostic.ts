@@ -6,4 +6,4 @@ import type { Span } from "./Span";
 /**
  * A single design rule violation or advisory.
  */
-export type Diagnostic = { severity: Severity, layer: DRCLayer, message: string, span: Span | null, source: string | null, target: string | null, fix: string | null, };
+export type Diagnostic = { severity: Severity, layer: DRCLayer, message: string, span?: Span, source?: string, target?: string, fix?: string, };

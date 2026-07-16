@@ -3,4 +3,4 @@
 /**
  * Signal identity metadata.
  */
-export type SignalIdentity = { name: string, label: string, originNode: string | null, originPort: string | null, };
+export type SignalIdentity = { name: string, label: string, originNode?: string, originPort?: string, };

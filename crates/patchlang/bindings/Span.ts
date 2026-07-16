@@ -5,4 +5,4 @@
  * The optional `file` field tracks which file this span belongs to
  * in multi-file compilation (index into a file table).
  */
-export type Span = { start: number, end: number, file: number | null, };
+export type Span = { start: number, end: number, file?: number, };

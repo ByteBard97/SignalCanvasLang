@@ -51,19 +51,25 @@ pub struct PortInfo {
     pub name: String,
     pub direction: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub connector: Option<String>,
     pub attributes: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub connected: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub signal_names: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub label: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub label_properties: Option<BTreeMap<String, String>>,
     /// Scene interface ID: `pl::{TemplateName}::{PortDefName}`.
     /// Groups ranged ports under one key per definition (e.g., `Mic_In`, not `Mic_In_1`).
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub source_key: Option<String>,
 }
 
@@ -80,10 +86,13 @@ pub struct GraphEdge {
     pub edge_type: String,
     pub properties: BTreeMap<String, String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub bus_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub bus_index: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub bus_size: Option<usize>,
 }
 
@@ -95,8 +104,10 @@ pub struct SignalIdentity {
     pub name: String,
     pub label: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub origin_node: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub origin_port: Option<String>,
 }
 
@@ -108,7 +119,9 @@ pub struct StreamIdentity {
     pub name: String,
     pub properties: BTreeMap<String, String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub source_node: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub source_port: Option<String>,
 }

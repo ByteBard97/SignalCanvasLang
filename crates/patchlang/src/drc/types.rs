@@ -39,12 +39,16 @@ pub struct Diagnostic {
     pub layer: DRCLayer,
     pub message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub span: Option<crate::error::Span>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub source: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub target: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub fix: Option<String>,
 }
 

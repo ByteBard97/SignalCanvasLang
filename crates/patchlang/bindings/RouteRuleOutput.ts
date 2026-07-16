@@ -5,8 +5,8 @@ export type RouteRuleOutput = { from_port: string, from_channel: number,
  * Owning instance of the `from` port when it's a cross-instance reference
  * (e.g. a Backbone-paired Engine↔Surface route). `None` for same-instance.
  */
-from_instance: string | null, to_port: string, to_channel: number, 
+from_instance?: string, to_port: string, to_channel: number, 
 /**
  * Owning instance of the `to` port when it's a cross-instance reference.
  */
-to_instance: string | null, };
+to_instance?: string, };

@@ -3,4 +3,4 @@
 /**
  * Stream identity metadata.
  */
-export type StreamIdentity = { name: string, properties: { [key in string]?: string }, sourceNode: string | null, sourcePort: string | null, };
+export type StreamIdentity = { name: string, properties: { [key in string]?: string }, sourceNode?: string, sourcePort?: string, };

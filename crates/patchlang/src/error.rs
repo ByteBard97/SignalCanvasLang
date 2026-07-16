@@ -10,6 +10,7 @@ pub struct Span {
     pub start: usize,
     pub end: usize,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub file: Option<u16>,
 }
 

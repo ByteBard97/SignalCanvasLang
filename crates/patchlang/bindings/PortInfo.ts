@@ -3,9 +3,9 @@
 /**
  * A port on a device node.
  */
-export type PortInfo = { id: string, name: string, direction: string, connector: string | null, attributes: Array<string>, connected: boolean | null, signalNames: Array<string> | null, label: string | null, labelProperties: { [key in string]?: string } | null, 
+export type PortInfo = { id: string, name: string, direction: string, connector?: string, attributes: Array<string>, connected?: boolean, signalNames?: Array<string>, label?: string, labelProperties?: { [key in string]?: string }, 
 /**
  * Scene interface ID: `pl::{TemplateName}::{PortDefName}`.
  * Groups ranged ports under one key per definition (e.g., `Mic_In`, not `Mic_In_1`).
  */
-sourceKey: string | null, };
+sourceKey?: string, };
