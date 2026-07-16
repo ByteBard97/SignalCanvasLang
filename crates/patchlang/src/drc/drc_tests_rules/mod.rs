@@ -4,4 +4,4 @@ mod structural;
 mod direction_electrical;
 mod mechanical_logical;
 mod temporal_flow;
-mod trace;
+mod convention_trace;
