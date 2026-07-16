@@ -521,5 +521,5 @@ pub fn parse_mapping_spec(raw: &str) -> Option<TsMappingSpec> {
 }
 
 #[cfg(test)]
-#[path = "compat_tests.rs"]
+#[path = "compat_tests/mod.rs"]
 mod tests;
