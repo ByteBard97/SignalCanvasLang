@@ -63,7 +63,7 @@ pub fn emit_from_canvas_input(input: CanvasEmitInput) -> Result<String, BuilderE
         let dedup_key = format!(
             "{}::{}",
             inst.manufacturer.as_deref().unwrap_or(""),
-            &inst.model
+            inst.model
         );
         if model_to_template.contains_key(&dedup_key) {
             continue;
@@ -94,7 +94,7 @@ pub fn emit_from_canvas_input(input: CanvasEmitInput) -> Result<String, BuilderE
         let dedup_key = format!(
             "{}::{}",
             inst.manufacturer.as_deref().unwrap_or(""),
-            &inst.model
+            inst.model
         );
         let template_name = model_to_template
             .get(&dedup_key)
