@@ -283,7 +283,8 @@ fn bus_named_output_chassis_port_survives_roundtrip() {
         display_name: None,
         input_interface: "AES67_In".into(),
         input_channels: vec![1, 2],
-        output_interface: "".into(),
+        input_groups: vec![],
+output_interface: "".into(),
         output_channels: vec![],
         named_outputs: vec![
             BusOutputEmitInput { instance: None, name: "Ch 1".into(), interface: "QLAN_Out".into(), channels: vec![1] },
@@ -365,7 +366,8 @@ fn bus_named_output_card_slot_port_survives_roundtrip() {
         display_name: None,
         input_interface: "QLAN_In".into(),
         input_channels: vec![1],
-        output_interface: "".into(),
+        input_groups: vec![],
+output_interface: "".into(),
         output_channels: vec![],
         named_outputs: vec![
             BusOutputEmitInput { instance: None,

@@ -48,7 +48,8 @@ fn emit_bus_with_card_slot_input_port() {
         // TypeScript pre-resolves the card interface ID to its port name
         input_interface: "AES67_Out".into(),
         input_channels: vec![1, 2],
-        output_interface: "AES67_Out".into(),
+        input_groups: vec![],
+output_interface: "AES67_Out".into(),
         output_channels: vec![3, 4],
         named_outputs: vec![],
     }];
@@ -82,9 +83,13 @@ fn emit_bridge_with_card_slot_source_port() {
         // TypeScript pre-resolves card interface to directional port name
         from_interface: "AES67_Out".into(),
         from_channel: 1,
+                from_start: 1,
+                from_end: 1,
         from_instance: None,
         to_interface: "AES67_Out".into(),
         to_channel: 2,
+                to_start: 2,
+                to_end: 2,
         to_instance: None,
     }];
     let input = CanvasEmitInput {
@@ -93,8 +98,14 @@ fn emit_bridge_with_card_slot_source_port() {
         manufacturer_cards: vec![make_aes67_card()],
     };
     let patch = emit_from_canvas_input(input).unwrap();
+    // The rule is a single-channel bridge (from_start==from_end==1), so the source
+    // index is written explicitly. The previous expectation omitted it, which claimed
+    // the whole 64ch port as the source of a 1ch mapping — the malformed asymmetric
+    // form THE INVARIANT exists to prevent. Card-slot ports aren't in `inst.interfaces`,
+    // so width can't be verified and the span is always written. Port-name resolution
+    // (this test's actual subject) is unchanged and still asserted below.
     assert!(
-        patch.contains("bridge AES67_Out -> AES67_Out[2]"),
+        patch.contains("bridge AES67_Out[1] -> AES67_Out[2]"),
         "bridge with card-slot port must be emitted:\n{patch}"
     );
     assert!(
@@ -205,6 +216,7 @@ fn emit_bus_named_output_without_destination_omits_port_ref() {
         display_name: None,
         input_interface: "madi_out".into(),
         input_channels: vec![1, 2],
+        input_groups: vec![],
         // No destination — output declared but unrouted
         output_interface: "".into(),
         output_channels: vec![],
@@ -249,7 +261,8 @@ fn emit_bus_named_output_with_destination_includes_port_ref() {
         display_name: None,
         input_interface: "madi_out".into(),
         input_channels: vec![1, 2],
-        output_interface: "".into(),
+        input_groups: vec![],
+output_interface: "".into(),
         output_channels: vec![],
         named_outputs: vec![
             BusOutputEmitInput { instance: None,
@@ -354,18 +367,26 @@ fn unresolvable_instance_routes_are_dropped() {
         RouteRuleEmitInput {
             from_interface: "__rf_receive__".into(),
             from_channel: 1,
+                from_start: 1,
+                from_end: 1,
             from_instance: None,
             to_interface: "pl::AD4Q::XLR_Out".into(),
             to_channel: 1,
+                to_start: 1,
+                to_end: 1,
             to_instance: None,
         },
         // Both unresolvable: must be dropped
         RouteRuleEmitInput {
             from_interface: "pl::PSM1000::Input".into(),
             from_channel: 1,
+                from_start: 1,
+                from_end: 1,
             from_instance: None,
             to_interface: "__rf_transmit__".into(),
             to_channel: 1,
+                to_start: 1,
+                to_end: 1,
             to_instance: None,
         },
     ];
@@ -402,9 +423,13 @@ fn cross_instance_route_survives_roundtrip() {
     engine.instance_routes = vec![RouteRuleEmitInput {
         from_interface: "gigace_in".into(),
         from_channel: 1,
+                from_start: 1,
+                from_end: 1,
         from_instance: None,
         to_interface: "line_out".into(),
         to_channel: 1,
+                to_start: 1,
+                to_end: 1,
         to_instance: Some("MON_Surface".into()),
     }];
     let mut surface = make_simple_instance(
@@ -420,9 +445,13 @@ fn cross_instance_route_survives_roundtrip() {
     surface.instance_routes = vec![RouteRuleEmitInput {
         from_interface: "gigace_in".into(),
         from_channel: 2,
+                from_start: 2,
+                from_end: 2,
         from_instance: Some("MON_Engine".into()),
         to_interface: "sg_out".into(),
         to_channel: 1,
+                to_start: 1,
+                to_end: 1,
         to_instance: None,
     }];
 

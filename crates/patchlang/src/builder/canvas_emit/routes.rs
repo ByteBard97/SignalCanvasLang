@@ -111,17 +111,48 @@ pub(super) fn build_instance_buses(
         .map(|bus| {
             let bus_name = sanitize_id(&bus.label);
 
-            let inputs: Vec<PortRef> = bus
-                .input_channels
-                .iter()
-                .map(|ch| PortRef {
-                    instance: None,
-                    port: sanitize_id(&bus.input_interface),
-                    index: Some(IndexSpec {
-                        elements: vec![IndexElement::Single { value: *ch }],
-                    }),
-                })
-                .collect();
+            let inputs: Vec<PortRef> = if bus.input_groups.is_empty() {
+                // Legacy path: flat input_interface + input_channels
+                bus.input_channels
+                    .iter()
+                    .map(|ch| PortRef {
+                        instance: None,
+                        port: sanitize_id(&bus.input_interface),
+                        index: Some(IndexSpec {
+                            elements: vec![IndexElement::Single { value: *ch }],
+                        }),
+                    })
+                    .collect()
+            } else {
+                // New path: one PortRef per channel per group, with cross-device instance
+                bus.input_groups
+                    .iter()
+                    .flat_map(|group| {
+                        let port = sanitize_id(&group.interface);
+                        let instance = group.instance.clone();
+                        if group.channels.is_empty() {
+                            vec![PortRef {
+                                instance,
+                                port,
+                                index: Some(IndexSpec {
+                                    elements: vec![IndexElement::Single { value: 1 }],
+                                }),
+                            }]
+                        } else {
+                            group.channels
+                                .iter()
+                                .map(|ch| PortRef {
+                                    instance: instance.clone(),
+                                    port: port.clone(),
+                                    index: Some(IndexSpec {
+                                        elements: vec![IndexElement::Single { value: *ch }],
+                                    }),
+                                })
+                                .collect()
+                        }
+                    })
+                    .collect()
+            };
 
             let outputs: Vec<BusOutput> = if bus.named_outputs.is_empty() {
                 // Fallback: single unnamed output using flat output_interface + channels

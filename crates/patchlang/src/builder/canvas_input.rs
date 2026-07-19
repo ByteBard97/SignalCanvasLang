@@ -103,6 +103,14 @@ pub struct ChannelLabelEmitInput {
 pub struct RouteRuleEmitInput {
     pub from_interface: String,
     pub from_channel: u32,
+    /// Span fields. `#[serde(default)]` is REQUIRED for backward compatibility: a
+    /// frontend built against an older WASM sends only `from_channel`, and without
+    /// the default serde rejects the whole payload with "missing field `from_start`".
+    /// `build_bridges` falls back to `from_channel` when these are 0.
+    #[serde(default)]
+    pub from_start: u32,
+    #[serde(default)]
+    pub from_end: u32,
     /// Optional owning instance of the `from` port. `None` = the instance that
     /// owns this route (same-instance route). `Some(name)` = a paired/other
     /// instance, e.g. a Backbone-paired Engine↔Surface cross-instance route.
@@ -111,6 +119,11 @@ pub struct RouteRuleEmitInput {
     pub from_instance: Option<String>,
     pub to_interface: String,
     pub to_channel: u32,
+    /// See `from_start` — `#[serde(default)]` is required for backward compatibility.
+    #[serde(default)]
+    pub to_start: u32,
+    #[serde(default)]
+    pub to_end: u32,
     /// Optional owning instance of the `to` port. See `from_instance`.
     #[serde(default)]
     #[ts(optional)]
@@ -119,12 +132,26 @@ pub struct RouteRuleEmitInput {
 
 #[derive(Debug, Clone, Deserialize, TS)]
 #[ts(export)]
+pub struct BusInputGroupEmitInput {
+    #[serde(default)]
+    #[ts(optional)]
+    pub instance: Option<String>,
+    pub interface: String,
+    pub channels: Vec<u32>,
+}
+
+#[derive(Debug, Clone, Deserialize, TS)]
+#[ts(export)]
 pub struct BusEmitInput {
     pub label: String,
     /// Human-readable name when it differs from the sanitized identifier, e.g. "PQ>MM"
     pub display_name: Option<String>,
+    /// Deprecated: use `input_groups` for multi-port bus inputs.
     pub input_interface: String,
+    /// Deprecated: use `input_groups` for multi-port bus inputs.
     pub input_channels: Vec<u32>,
+    #[serde(default)]
+    pub input_groups: Vec<BusInputGroupEmitInput>,
     pub output_interface: String,
     pub output_channels: Vec<u32>,
     /// Named outputs (e.g. [{name: "Main Output", interface: "Matrix_Out", channels: [1, 2]}])

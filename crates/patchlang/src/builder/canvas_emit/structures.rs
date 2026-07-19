@@ -45,45 +45,35 @@ pub(super) fn build_slots(groups: &[CardSlotGroupEmitInput]) -> Vec<SlotDef> {
 
 pub(super) fn build_bridges(
     rules: &[RouteRuleEmitInput],
-    _ifaces: &[InterfaceEmitInput],
+    ifaces: &[InterfaceEmitInput],
 ) -> Vec<BridgeDecl> {
     let mut bridges = Vec::new();
     for rule in rules {
-        // The TypeScript assembler pre-resolves from_interface / to_interface
-        // to their directional port names (e.g. "Mic_In", "Dante_Out").
-        // Use them directly — no interface lookup or directional resolution here.
         let source_port = rule.from_interface.clone();
         let target_port = rule.to_interface.clone();
 
-        // When both source and target start at channel 1, the TypeScript
-        // emitter omits the index entirely (full-width rangeless bridge).
-        let src_index = if rule.from_channel == 1 {
-            None
+        let (from_start, from_end) = if rule.from_start == 0 {
+            (rule.from_channel, rule.from_channel)
         } else {
-            Some(IndexSpec {
-                elements: vec![IndexElement::Single {
-                    value: rule.from_channel,
-                }],
-            })
+            (rule.from_start, rule.from_end)
         };
-        let tgt_index = if rule.to_channel == 1 {
-            None
+        let (to_start, to_end) = if rule.to_start == 0 {
+            (rule.to_channel, rule.to_channel)
         } else {
-            Some(IndexSpec {
-                elements: vec![IndexElement::Single {
-                    value: rule.to_channel,
-                }],
-            })
+            (rule.to_start, rule.to_end)
         };
+
+        let src_index = bridge_index_for_span(from_start, from_end, &source_port, ifaces);
+        let tgt_index = bridge_index_for_span(to_start, to_end, &target_port, ifaces);
 
         bridges.push(BridgeDecl {
             source: PortRef {
-                instance: None,
+                instance: rule.from_instance.clone(),
                 port: source_port,
                 index: src_index,
             },
             target: PortRef {
-                instance: None,
+                instance: rule.to_instance.clone(),
                 port: target_port,
                 index: tgt_index,
             },
@@ -91,6 +81,37 @@ pub(super) fn build_bridges(
         });
     }
     bridges
+}
+
+/// Emit an index for a bridge span per THE INVARIANT.
+/// Omit the index only when the span is CERTAINLY the full port width
+/// (start == 1 and end == channel_count of the resolved interface).
+/// Otherwise always write the explicit span — never guess.
+fn bridge_index_for_span(
+    start: u32,
+    end: u32,
+    port_name: &str,
+    ifaces: &[InterfaceEmitInput],
+) -> Option<IndexSpec> {
+    if start == 1 {
+        if let Some(iface) = ifaces.iter().find(|i| {
+            directional_port_name(i, PortSide::Input) == port_name
+                || directional_port_name(i, PortSide::Output) == port_name
+        }) {
+            if end == iface.channel_count {
+                return None;
+            }
+        }
+    }
+    if end == start {
+        Some(IndexSpec {
+            elements: vec![IndexElement::Single { value: start }],
+        })
+    } else {
+        Some(IndexSpec {
+            elements: vec![IndexElement::Range { start, end }],
+        })
+    }
 }
 
 // ---------------------------------------------------------------------------

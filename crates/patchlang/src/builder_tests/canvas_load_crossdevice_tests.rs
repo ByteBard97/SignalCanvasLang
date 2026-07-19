@@ -224,7 +224,8 @@ fn bus_cross_device_output_roundtrip() {
         display_name: None,
         input_interface: "AES_In".into(),
         input_channels: vec![1],
-        output_interface: "".into(),
+                input_groups: vec![],
+                output_interface: "".into(),
         output_channels: vec![],
         named_outputs: vec![BusOutputEmitInput {
             name: "Drums-L".into(),
@@ -280,7 +281,8 @@ fn bus_cross_device_output_multi_channel_roundtrip() {
         display_name: None,
         input_interface: "AES_In".into(),
         input_channels: vec![1],
-        output_interface: "".into(),
+                input_groups: vec![],
+                output_interface: "".into(),
         output_channels: vec![],
         named_outputs: vec![BusOutputEmitInput {
             name: "Drums-Stereo".into(),

@@ -135,9 +135,13 @@ fn rebuild_input_from_load(loaded: &CanvasLoadOutput) -> CanvasEmitInput {
             RouteRuleEmitInput {
                 from_interface: r.from_port.clone(),
                 from_channel: r.from_channel,
+                from_start: r.from_channel,
+                from_end: r.from_channel,
                 from_instance: r.from_instance.clone(),
                 to_interface: r.to_port.clone(),
                 to_channel: r.to_channel,
+                to_start: r.to_channel,
+                to_end: r.to_channel,
                 to_instance: r.to_instance.clone(),
             }
         }).collect();
@@ -146,9 +150,13 @@ fn rebuild_input_from_load(loaded: &CanvasLoadOutput) -> CanvasEmitInput {
             RouteRuleEmitInput {
                 from_interface: r.from_port.clone(),
                 from_channel: r.from_channel,
+                from_start: r.from_channel,
+                from_end: r.from_channel,
                 from_instance: r.from_instance.clone(),
                 to_interface: r.to_port.clone(),
                 to_channel: r.to_channel,
+                to_start: r.to_channel,
+                to_end: r.to_channel,
                 to_instance: r.to_instance.clone(),
             }
         }).collect();
@@ -165,6 +173,7 @@ fn rebuild_input_from_load(loaded: &CanvasLoadOutput) -> CanvasEmitInput {
                 display_name: b.display_name.clone(),
                 input_interface: b.input_port.clone(),
                 input_channels: b.input_channels.clone(),
+                input_groups: vec![],
                 // Flat output fields are redundant when named_outputs is non-empty;
                 // fill from the first named output so the fallback path is stable.
                 output_interface: b.named_outputs.first()

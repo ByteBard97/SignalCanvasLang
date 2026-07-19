@@ -231,17 +231,30 @@ pub fn load_from_patch(patch_source: &str, _layout_json: &str) -> Result<CanvasL
         }).collect();
 
         // Template bridges → route_rules on UserDevice (hardwired internal paths)
-        let route_rules: Vec<RouteRuleOutput> = tmpl.bridges.iter().map(|b| {
-            let from_channel = extract_single_index(&b.source.index).unwrap_or(1);
-            let to_channel = extract_single_index(&b.target.index).unwrap_or(1);
-            RouteRuleOutput {
+        let port_spans: HashMap<&str, (u32, u32)> = tmpl.ports.iter().map(|p| {
+            let span = p.range.as_ref().map(|r| (r.start, r.end)).unwrap_or((1, 1));
+            (p.name.as_str(), span)
+        }).collect();
+
+        let route_rules: Vec<RouteRuleOutput> = tmpl.bridges.iter().filter_map(|b| {
+            let (from_start, from_end) = bridge_endpoint_span(
+                &b.source, &port_spans, &tmpl.name, "source"
+            )?;
+            let (to_start, to_end) = bridge_endpoint_span(
+                &b.target, &port_spans, &tmpl.name, "target"
+            )?;
+            Some(RouteRuleOutput {
                 from_port: b.source.port.clone(),
-                from_channel,
+                from_channel: from_start,
+                from_start,
+                from_end,
                 from_instance: b.source.instance.clone(),
                 to_port: b.target.port.clone(),
-                to_channel,
+                to_channel: to_start,
+                to_start,
+                to_end,
                 to_instance: b.target.instance.clone(),
-            }
+            })
         }).collect();
 
         // Instance routes
@@ -251,9 +264,13 @@ pub fn load_from_patch(patch_source: &str, _layout_json: &str) -> Result<CanvasL
             RouteRuleOutput {
                 from_port: r.source.port.clone(),
                 from_channel,
+                from_start: from_channel,
+                from_end: from_channel,
                 from_instance: r.source.instance.clone(),
                 to_port: r.target.port.clone(),
                 to_channel,
+                to_start: to_channel,
+                to_end: to_channel,
                 to_instance: r.target.instance.clone(),
             }
         }).collect();
@@ -278,13 +295,46 @@ pub fn load_from_patch(patch_source: &str, _layout_json: &str) -> Result<CanvasL
         let internal_buses: Vec<BusOutput> = inst.buses.iter().map(|bus| {
             let display_name = bus.label.clone().filter(|n| !n.is_empty());
 
-            // Input port: blank out if the port name is a garbage sentinel.
-            let first_input = bus.inputs.iter()
-                .find(|p| is_valid_port(p));
-            let input_port = first_input.map(|p| p.port.clone()).unwrap_or_default();
-            let input_channels: Vec<u32> = bus.inputs.iter()
+            // Input: filter valid, then group by (instance, port) preserving first-seen order.
+            let valid_inputs: Vec<_> = bus.inputs.iter()
                 .filter(|p| is_valid_port(p))
-                .map(|p| extract_single_index(&p.index).unwrap_or(1))
+                .collect();
+            let input_port = valid_inputs.first()
+                .map(|p| p.port.clone())
+                .unwrap_or_default();
+            let input_channels: Vec<u32> = valid_inputs.iter()
+                .flat_map(|p| expand_index(&p.index))
+                .collect();
+            // Union channels across every input sharing an (instance, port) key, in
+            // first-seen order. A bus is normally fed by MANY single-channel inputs on
+            // the same port (`input: Mix_Bus[1]` … `input: Mix_Bus[24]`), so keying on
+            // first-occurrence only — and discarding the rest — would drop 23 of 24
+            // channels. Mirrors the named-output grouping below, which unions the same way.
+            let mut group_map: std::collections::HashMap<(Option<String>, String), Vec<u32>> =
+                std::collections::HashMap::new();
+            let mut group_order: Vec<(Option<String>, String)> = Vec::new();
+            for p in &valid_inputs {
+                let key = (p.instance.clone(), p.port.clone());
+                if !group_map.contains_key(&key) {
+                    group_order.push(key.clone());
+                }
+                let channels = expand_index(&p.index);
+                let entry = group_map.entry(key).or_default();
+                if channels.is_empty() {
+                    entry.push(1);
+                } else {
+                    entry.extend(channels);
+                }
+            }
+            let input_groups: Vec<BusInputGroup> = group_order
+                .into_iter()
+                .filter_map(|key| {
+                    group_map.remove(&key).map(|channels| BusInputGroup {
+                        input_instance: key.0,
+                        input_port: key.1,
+                        input_channels: channels,
+                    })
+                })
                 .collect();
 
             let named_outputs: Vec<BusNamedOutput> = bus.outputs.iter().filter_map(|out| {
@@ -301,25 +351,53 @@ pub fn load_from_patch(patch_source: &str, _layout_json: &str) -> Result<CanvasL
                     return None;
                 }
 
-                let output_port = real_dests.first()
-                    .map(|p| p.port.clone())
-                    .unwrap_or_default();
-                let output_channels: Vec<u32> = real_dests.iter()
-                    .map(|p| extract_single_index(&p.index).unwrap_or(1))
-                    .collect();
-                Some(BusNamedOutput {
-                    name: out.label.clone(),
-                    output_instance: real_dests.first().and_then(|p| p.instance.clone()),
-                    output_port,
-                    output_channels,
-                })
-            }).collect();
+                // Emit one BusNamedOutput per distinct (instance, port), all sharing the label.
+                // Multiple indices on the same port (e.g. Port[1], Port[2]) are merged into
+                // one output entry with a unioned channel set, preserving first-seen order.
+                let mut output_map: std::collections::HashMap<(Option<String>, String), Vec<u32>> = std::collections::HashMap::new();
+                let mut output_order: Vec<(Option<String>, String)> = Vec::new();
+                for p in &real_dests {
+                    let key = (p.instance.clone(), p.port.clone());
+                    if !output_map.contains_key(&key) {
+                        output_order.push(key.clone());
+                    }
+                    let channels = expand_index(&p.index);
+                    let entry = output_map.entry(key).or_insert_with(Vec::new);
+                    if channels.is_empty() {
+                        entry.push(1);
+                    } else {
+                        entry.extend(channels);
+                    }
+                }
+                let mut outputs: Vec<BusNamedOutput> = Vec::new();
+                for key in output_order {
+                    if let Some(channels) = output_map.remove(&key) {
+                        outputs.push(BusNamedOutput {
+                            name: out.label.clone(),
+                            output_instance: key.0.clone(),
+                            output_port: key.1.clone(),
+                            output_channels: channels,
+                        });
+                    }
+                }
+                if outputs.is_empty() {
+                    // Preserve legitimately unrouted outputs with a single empty entry
+                    outputs.push(BusNamedOutput {
+                        name: out.label.clone(),
+                        output_instance: None,
+                        output_port: String::new(),
+                        output_channels: vec![],
+                    });
+                }
+                Some(outputs)
+            }).flatten().collect();
 
             BusOutput {
                 name: bus.name.clone(),
                 display_name,
                 input_port,
                 input_channels,
+                input_groups,
                 named_outputs,
             }
         }).collect();
@@ -445,6 +523,124 @@ fn kv_map(kvs: &[crate::ast::KeyValue]) -> HashMap<String, String> {
     }).collect()
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn spec_single(n: u32) -> Option<crate::ast::IndexSpec> {
+        Some(crate::ast::IndexSpec {
+            elements: vec![IndexElement::Single { value: n }],
+        })
+    }
+
+    fn spec_range(start: u32, end: u32) -> Option<crate::ast::IndexSpec> {
+        Some(crate::ast::IndexSpec {
+            elements: vec![IndexElement::Range { start, end }],
+        })
+    }
+
+    fn spec_auto() -> Option<crate::ast::IndexSpec> {
+        Some(crate::ast::IndexSpec {
+            elements: vec![IndexElement::Auto],
+        })
+    }
+
+    fn spec_multi() -> Option<crate::ast::IndexSpec> {
+        Some(crate::ast::IndexSpec {
+            elements: vec![
+                IndexElement::Single { value: 1 },
+                IndexElement::Single { value: 3 },
+                IndexElement::Single { value: 5 },
+            ],
+        })
+    }
+
+    fn spec_two_ranges() -> Option<crate::ast::IndexSpec> {
+        Some(crate::ast::IndexSpec {
+            elements: vec![
+                IndexElement::Range { start: 1, end: 4 },
+                IndexElement::Range { start: 5, end: 8 },
+            ],
+        })
+    }
+
+    fn spec_mixed() -> Option<crate::ast::IndexSpec> {
+        Some(crate::ast::IndexSpec {
+            elements: vec![
+                IndexElement::Single { value: 1 },
+                IndexElement::Range { start: 3, end: 5 },
+            ],
+        })
+    }
+
+    #[test]
+    fn index_span_single() {
+        assert_eq!(index_span(&spec_single(5)), Some((5, 5)));
+    }
+
+    #[test]
+    fn index_span_range() {
+        assert_eq!(index_span(&spec_range(10, 20)), Some((10, 20)));
+    }
+
+    #[test]
+    fn index_span_absent() {
+        assert_eq!(index_span(&None), None);
+    }
+
+    #[test]
+    fn index_span_auto() {
+        assert_eq!(index_span(&spec_auto()), None);
+    }
+
+    #[test]
+    fn index_span_empty() {
+        let empty = Some(crate::ast::IndexSpec { elements: vec![] });
+        assert_eq!(index_span(&empty), None);
+    }
+
+    #[test]
+    fn index_span_multi_element() {
+        assert_eq!(index_span(&spec_multi()), None);
+    }
+
+    #[test]
+    fn index_span_two_ranges() {
+        assert_eq!(index_span(&spec_two_ranges()), None);
+    }
+
+    #[test]
+    fn index_span_mixed_single_range() {
+        assert_eq!(index_span(&spec_mixed()), None);
+    }
+
+    /// FIX 1 regression guard: a port declared with a non-1 start (e.g. [17..24])
+    /// and a bridge with NO index must load as span (17, 24), not (1, 8).
+    #[test]
+    fn bridge_absent_index_uses_port_declared_span() {
+        let patch = r#"
+template T {
+  ports {
+    P[17..24]: in(XLR)
+    Q[1..8]: out(XLR)
+  }
+  bridge P -> Q
+}
+instance I is T {}
+"#;
+        let loaded = load_from_patch(patch, "").expect("load must succeed");
+        let inst = loaded.instances.iter().find(|i| i.name == "I").expect("I must exist");
+        assert_eq!(inst.route_rules.len(), 1, "expected one bridge rule");
+        let rule = &inst.route_rules[0];
+        assert_eq!(rule.from_port, "P", "from_port mismatch");
+        assert_eq!(rule.from_start, 17, "absent index on P[17..24] must yield start=17, not 1");
+        assert_eq!(rule.from_end, 24, "absent index on P[17..24] must yield end=24, not 8");
+        assert_eq!(rule.to_port, "Q", "to_port mismatch");
+        assert_eq!(rule.to_start, 1, "absent index on Q[1..8] must yield start=1");
+        assert_eq!(rule.to_end, 8, "absent index on Q[1..8] must yield end=8");
+    }
+}
+
 fn extract_ports(tmpl: &crate::ast::TemplateDecl) -> Vec<PortLoadOutput> {
     tmpl.ports.iter().map(|p| {
         let direction = match p.direction {
@@ -479,6 +675,37 @@ fn extract_slot_groups(tmpl: &crate::ast::TemplateDecl) -> Vec<CardSlotGroupOutp
     }).collect()
 }
 
+/// Resolve a bridge endpoint's channel span per THE INVARIANT.
+/// Returns None when the index is multi-element (non-contiguous) — caller must skip the bridge.
+fn bridge_endpoint_span(
+    port_ref: &crate::ast::PortRef,
+    port_spans: &HashMap<&str, (u32, u32)>,
+    template_name: &str,
+    which: &str,            // "source" or "target", for the warning text
+) -> Option<(u32, u32)> {
+    match index_span(&port_ref.index) {
+        Some((s, e)) => Some((s, e)),
+        None => {
+            // Distinguish absent index (None/Auto/empty) from multi-element
+            let is_absent = port_ref.index.is_none()
+                || port_ref.index.as_ref().map(|spec| spec.elements.is_empty()).unwrap_or(true)
+                || port_ref.index.as_ref().map(|spec| {
+                    spec.elements.len() == 1 && matches!(&spec.elements[0], IndexElement::Auto)
+                }).unwrap_or(false);
+            if is_absent {
+                let span = port_spans.get(port_ref.port.as_str()).copied().unwrap_or_else(|| {
+                    eprintln!("warning: bridge {} port '{}' not found in template '{}', falling back to (1,1)", which, port_ref.port, template_name);
+                    (1, 1)
+                });
+                Some(span)
+            } else {
+                eprintln!("warning: bridge '{}' in template '{}' has a multi-element index on {}; skipping (non-contiguous)", port_ref.port, template_name, which);
+                None
+            }
+        }
+    }
+}
+
 fn extract_single_index(index: &Option<crate::ast::IndexSpec>) -> Option<u32> {
     index.as_ref().and_then(|spec| {
         spec.elements.first().and_then(|el| match el {
@@ -486,6 +713,27 @@ fn extract_single_index(index: &Option<crate::ast::IndexSpec>) -> Option<u32> {
             IndexElement::Range { start, .. } => Some(*start),
             IndexElement::Auto => None,
         })
+    })
+}
+
+/// Contiguous span of an index spec, per THE INVARIANT in docs/plans/canvas-dto-plurality.md.
+///
+/// `[a..b]`      → `Some((a, b))`
+/// `[n]`         → `Some((n, n))`
+/// absent / Auto → `None` — the caller applies the full port width.
+/// multi-element (`[1,3,5]`) → `None` — no honest contiguous span exists; the caller
+///   must skip and log rather than widening to `min..max`, which would invent channels.
+fn index_span(index: &Option<crate::ast::IndexSpec>) -> Option<(u32, u32)> {
+    index.as_ref().and_then(|spec| {
+        match spec.elements.len() {
+            0 => None,
+            1 => match &spec.elements[0] {
+                IndexElement::Single { value } => Some((*value, *value)),
+                IndexElement::Range { start, end } => Some((*start, *end)),
+                IndexElement::Auto => None,
+            },
+            _ => None,
+        }
     })
 }
 

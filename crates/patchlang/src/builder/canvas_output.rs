@@ -94,14 +94,20 @@ pub struct ChannelLabelOutput {
 #[ts(export)]
 pub struct RouteRuleOutput {
     pub from_port: String,
+    /// Deprecated: use `from_start`/`from_end` for the full span.
     pub from_channel: u32,
+    pub from_start: u32,
+    pub from_end: u32,
     /// Owning instance of the `from` port when it's a cross-instance reference
     /// (e.g. a Backbone-paired Engine↔Surface route). `None` for same-instance.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub from_instance: Option<String>,
     pub to_port: String,
+    /// Deprecated: use `to_start`/`to_end` for the full span.
     pub to_channel: u32,
+    pub to_start: u32,
+    pub to_end: u32,
     /// Owning instance of the `to` port when it's a cross-instance reference.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
@@ -110,11 +116,24 @@ pub struct RouteRuleOutput {
 
 #[derive(Debug, Serialize, TS)]
 #[ts(export)]
+pub struct BusInputGroup {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub input_instance: Option<String>,
+    pub input_port: String,
+    pub input_channels: Vec<u32>,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
 pub struct BusOutput {
     pub name: String,
     pub display_name: Option<String>,
+    /// Deprecated: use `input_groups` for multi-port bus inputs.
     pub input_port: String,
+    /// Deprecated: use `input_groups` for multi-port bus inputs.
     pub input_channels: Vec<u32>,
+    pub input_groups: Vec<BusInputGroup>,
     pub named_outputs: Vec<BusNamedOutput>,
 }
 

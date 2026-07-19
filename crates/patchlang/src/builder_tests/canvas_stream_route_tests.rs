@@ -190,9 +190,13 @@ fn emit_instance_route_via_card_slot_port() {
     inst.instance_routes = vec![RouteRuleEmitInput {
         from_interface: "card_aes67_out".into(),
         from_channel: 1,
+                from_start: 1,
+                from_end: 1,
         from_instance: None,
         to_interface: "mgmt".into(),
         to_channel: 1,
+                to_start: 1,
+                to_end: 1,
         to_instance: None,
     }];
     let input = CanvasEmitInput {

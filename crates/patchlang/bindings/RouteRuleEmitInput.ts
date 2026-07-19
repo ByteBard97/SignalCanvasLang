@@ -2,11 +2,22 @@
 
 export type RouteRuleEmitInput = { from_interface: string, from_channel: number, 
 /**
+ * Span fields. `#[serde(default)]` is REQUIRED for backward compatibility: a
+ * frontend built against an older WASM sends only `from_channel`, and without
+ * the default serde rejects the whole payload with "missing field `from_start`".
+ * `build_bridges` falls back to `from_channel` when these are 0.
+ */
+from_start: number, from_end: number, 
+/**
  * Optional owning instance of the `from` port. `None` = the instance that
  * owns this route (same-instance route). `Some(name)` = a paired/other
  * instance, e.g. a Backbone-paired Engine↔Surface cross-instance route.
  */
 from_instance?: string, to_interface: string, to_channel: number, 
+/**
+ * See `from_start` — `#[serde(default)]` is required for backward compatibility.
+ */
+to_start: number, to_end: number, 
 /**
  * Optional owning instance of the `to` port. See `from_instance`.
  */

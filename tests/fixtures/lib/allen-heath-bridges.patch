@@ -1,0 +1,72 @@
+# Allen & Heath GX4816 and DX168 templates
+# Extracted from the full dLive stdlib for bridge span round-trip testing.
+# GX4816 bridges exercise 1..48, 1..16, 1..32, 65..96, 97..128 spans.
+# DX168 bridge DX_A_In[17..24] -> DX_Cascade_Out[1..8] guards against
+# frontend width inference that fabricates channels (issue #30).
+
+template GX4816 {
+  meta {
+    manufacturer: "Allen and Heath"
+    model: "GX4816"
+    category: "Stagebox"
+    kind: "fixed-converter"
+  }
+  ports {
+    GX_In[1..128]: in(RJ45) [GX, console_link]
+    GX_Out[1..128]: out(RJ45) [GX, console_link]
+    DX_1_In[1..32]: in(RJ45) [DX]
+    DX_1_Out[1..32]: out(RJ45) [DX]
+    DX_2_In[1..32]: in(RJ45) [DX, me_capable]
+    DX_2_Out[1..40]: out(RJ45) [DX, dSNAKE, me_capable]
+    Mic_In[1..48]: in(XLR) [Analogue]
+    Line_Out[1..16]: out(XLR) [Analogue]
+  }
+  # gigaACE channel allocation per A&H DX & GX System Guide ISS_5 page 20:
+  #   Mic_In  → gigaACE 1..48
+  #   (gap)     gigaACE 49..64 reserved/unused
+  #   DX_1    → gigaACE 65..96
+  #   DX_2    → gigaACE 97..128
+  # DX_2_Out is declared as 40ch to capture ME-mode capacity; bridge only
+  # feeds 1..32 from gigaACE because in ME mode the surface bypasses the patch
+  # and injects channels 33..40 directly from its ME mix bus.
+  bridge Mic_In[1..48] -> GX_Out[1..48]
+  bridge GX_In[1..16] -> Line_Out[1..16]
+  bridge DX_1_In[1..32] -> GX_Out[65..96]
+  bridge GX_In[65..96] -> DX_1_Out[1..32]
+  bridge DX_2_In[1..32] -> GX_Out[97..128]
+  bridge GX_In[97..128] -> DX_2_Out[1..32]
+}
+
+template DX168 {
+  meta {
+    manufacturer: "Allen and Heath"
+    model: "DX168"
+    category: "Stagebox"
+    kind: "fixed-converter"
+  }
+  ports {
+    DX_A_In[1..32]: in(RJ45) [DX, console_link]
+    DX_A_Out[1..32]: out(RJ45) [DX, console_link]
+    DX_Cascade_In[1..32]: in(RJ45) [DX, cascade]
+    DX_Cascade_Out[1..32]: out(RJ45) [DX, cascade]
+    Mic_In[1..16]: in(XLR) [Analogue]
+    Line_Out[1..8]: out(XLR) [Analogue]
+  }
+  # Cascade channel allocation per A&H DX & GX System Guide ISS_5 page 6:
+  #   First DX168  (this device): IN ch 1..16, OUT ch 1..8
+  #   Second DX168 (cascaded):    IN ch 17..32, OUT ch 17..24
+  # When a second DX168 is plugged into DX_Cascade, its 16 mics arrive on
+  # DX_Cascade_In ch 1..16 and we forward them to DX_A_Out ch 17..32 so the
+  # surface sees the cascaded device's mics at the documented offset.
+  # The return path forwards DX_A_In ch 17..24 to DX_Cascade_Out ch 1..8
+  # (cascaded DX168 only has 8 line outs).
+  bridge Mic_In[1..16] -> DX_A_Out[1..16]
+  bridge DX_A_In[1..8] -> Line_Out[1..8]
+  bridge DX_Cascade_In[1..16] -> DX_A_Out[17..32]
+  bridge DX_A_In[17..24] -> DX_Cascade_Out[1..8]
+}
+
+instance SB1 is GX4816 {
+}
+instance DX1 is DX168 {
+}
