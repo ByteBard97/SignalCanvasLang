@@ -362,7 +362,7 @@ pub fn load_from_patch(patch_source: &str, _layout_json: &str) -> Result<CanvasL
                         output_order.push(key.clone());
                     }
                     let channels = expand_index(&p.index);
-                    let entry = output_map.entry(key).or_insert_with(Vec::new);
+                    let entry = output_map.entry(key).or_default();
                     if channels.is_empty() {
                         entry.push(1);
                     } else {
@@ -523,123 +523,6 @@ fn kv_map(kvs: &[crate::ast::KeyValue]) -> HashMap<String, String> {
     }).collect()
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn spec_single(n: u32) -> Option<crate::ast::IndexSpec> {
-        Some(crate::ast::IndexSpec {
-            elements: vec![IndexElement::Single { value: n }],
-        })
-    }
-
-    fn spec_range(start: u32, end: u32) -> Option<crate::ast::IndexSpec> {
-        Some(crate::ast::IndexSpec {
-            elements: vec![IndexElement::Range { start, end }],
-        })
-    }
-
-    fn spec_auto() -> Option<crate::ast::IndexSpec> {
-        Some(crate::ast::IndexSpec {
-            elements: vec![IndexElement::Auto],
-        })
-    }
-
-    fn spec_multi() -> Option<crate::ast::IndexSpec> {
-        Some(crate::ast::IndexSpec {
-            elements: vec![
-                IndexElement::Single { value: 1 },
-                IndexElement::Single { value: 3 },
-                IndexElement::Single { value: 5 },
-            ],
-        })
-    }
-
-    fn spec_two_ranges() -> Option<crate::ast::IndexSpec> {
-        Some(crate::ast::IndexSpec {
-            elements: vec![
-                IndexElement::Range { start: 1, end: 4 },
-                IndexElement::Range { start: 5, end: 8 },
-            ],
-        })
-    }
-
-    fn spec_mixed() -> Option<crate::ast::IndexSpec> {
-        Some(crate::ast::IndexSpec {
-            elements: vec![
-                IndexElement::Single { value: 1 },
-                IndexElement::Range { start: 3, end: 5 },
-            ],
-        })
-    }
-
-    #[test]
-    fn index_span_single() {
-        assert_eq!(index_span(&spec_single(5)), Some((5, 5)));
-    }
-
-    #[test]
-    fn index_span_range() {
-        assert_eq!(index_span(&spec_range(10, 20)), Some((10, 20)));
-    }
-
-    #[test]
-    fn index_span_absent() {
-        assert_eq!(index_span(&None), None);
-    }
-
-    #[test]
-    fn index_span_auto() {
-        assert_eq!(index_span(&spec_auto()), None);
-    }
-
-    #[test]
-    fn index_span_empty() {
-        let empty = Some(crate::ast::IndexSpec { elements: vec![] });
-        assert_eq!(index_span(&empty), None);
-    }
-
-    #[test]
-    fn index_span_multi_element() {
-        assert_eq!(index_span(&spec_multi()), None);
-    }
-
-    #[test]
-    fn index_span_two_ranges() {
-        assert_eq!(index_span(&spec_two_ranges()), None);
-    }
-
-    #[test]
-    fn index_span_mixed_single_range() {
-        assert_eq!(index_span(&spec_mixed()), None);
-    }
-
-    /// FIX 1 regression guard: a port declared with a non-1 start (e.g. [17..24])
-    /// and a bridge with NO index must load as span (17, 24), not (1, 8).
-    #[test]
-    fn bridge_absent_index_uses_port_declared_span() {
-        let patch = r#"
-template T {
-  ports {
-    P[17..24]: in(XLR)
-    Q[1..8]: out(XLR)
-  }
-  bridge P -> Q
-}
-instance I is T {}
-"#;
-        let loaded = load_from_patch(patch, "").expect("load must succeed");
-        let inst = loaded.instances.iter().find(|i| i.name == "I").expect("I must exist");
-        assert_eq!(inst.route_rules.len(), 1, "expected one bridge rule");
-        let rule = &inst.route_rules[0];
-        assert_eq!(rule.from_port, "P", "from_port mismatch");
-        assert_eq!(rule.from_start, 17, "absent index on P[17..24] must yield start=17, not 1");
-        assert_eq!(rule.from_end, 24, "absent index on P[17..24] must yield end=24, not 8");
-        assert_eq!(rule.to_port, "Q", "to_port mismatch");
-        assert_eq!(rule.to_start, 1, "absent index on Q[1..8] must yield start=1");
-        assert_eq!(rule.to_end, 8, "absent index on Q[1..8] must yield end=8");
-    }
-}
 
 fn extract_ports(tmpl: &crate::ast::TemplateDecl) -> Vec<PortLoadOutput> {
     tmpl.ports.iter().map(|p| {
@@ -810,4 +693,122 @@ fn parse_mapping_str(mapping: &str) -> Vec<ChannelMappingOutput> {
         let to_ch: u32 = b.trim().parse().ok()?;
         Some(ChannelMappingOutput { from_channel: from_ch, to_channel: to_ch })
     }).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn spec_single(n: u32) -> Option<crate::ast::IndexSpec> {
+        Some(crate::ast::IndexSpec {
+            elements: vec![IndexElement::Single { value: n }],
+        })
+    }
+
+    fn spec_range(start: u32, end: u32) -> Option<crate::ast::IndexSpec> {
+        Some(crate::ast::IndexSpec {
+            elements: vec![IndexElement::Range { start, end }],
+        })
+    }
+
+    fn spec_auto() -> Option<crate::ast::IndexSpec> {
+        Some(crate::ast::IndexSpec {
+            elements: vec![IndexElement::Auto],
+        })
+    }
+
+    fn spec_multi() -> Option<crate::ast::IndexSpec> {
+        Some(crate::ast::IndexSpec {
+            elements: vec![
+                IndexElement::Single { value: 1 },
+                IndexElement::Single { value: 3 },
+                IndexElement::Single { value: 5 },
+            ],
+        })
+    }
+
+    fn spec_two_ranges() -> Option<crate::ast::IndexSpec> {
+        Some(crate::ast::IndexSpec {
+            elements: vec![
+                IndexElement::Range { start: 1, end: 4 },
+                IndexElement::Range { start: 5, end: 8 },
+            ],
+        })
+    }
+
+    fn spec_mixed() -> Option<crate::ast::IndexSpec> {
+        Some(crate::ast::IndexSpec {
+            elements: vec![
+                IndexElement::Single { value: 1 },
+                IndexElement::Range { start: 3, end: 5 },
+            ],
+        })
+    }
+
+    #[test]
+    fn index_span_single() {
+        assert_eq!(index_span(&spec_single(5)), Some((5, 5)));
+    }
+
+    #[test]
+    fn index_span_range() {
+        assert_eq!(index_span(&spec_range(10, 20)), Some((10, 20)));
+    }
+
+    #[test]
+    fn index_span_absent() {
+        assert_eq!(index_span(&None), None);
+    }
+
+    #[test]
+    fn index_span_auto() {
+        assert_eq!(index_span(&spec_auto()), None);
+    }
+
+    #[test]
+    fn index_span_empty() {
+        let empty = Some(crate::ast::IndexSpec { elements: vec![] });
+        assert_eq!(index_span(&empty), None);
+    }
+
+    #[test]
+    fn index_span_multi_element() {
+        assert_eq!(index_span(&spec_multi()), None);
+    }
+
+    #[test]
+    fn index_span_two_ranges() {
+        assert_eq!(index_span(&spec_two_ranges()), None);
+    }
+
+    #[test]
+    fn index_span_mixed_single_range() {
+        assert_eq!(index_span(&spec_mixed()), None);
+    }
+
+    /// FIX 1 regression guard: a port declared with a non-1 start (e.g. [17..24])
+    /// and a bridge with NO index must load as span (17, 24), not (1, 8).
+    #[test]
+    fn bridge_absent_index_uses_port_declared_span() {
+        let patch = r#"
+template T {
+  ports {
+    P[17..24]: in(XLR)
+    Q[1..8]: out(XLR)
+  }
+  bridge P -> Q
+}
+instance I is T {}
+"#;
+        let loaded = load_from_patch(patch, "").expect("load must succeed");
+        let inst = loaded.instances.iter().find(|i| i.name == "I").expect("I must exist");
+        assert_eq!(inst.route_rules.len(), 1, "expected one bridge rule");
+        let rule = &inst.route_rules[0];
+        assert_eq!(rule.from_port, "P", "from_port mismatch");
+        assert_eq!(rule.from_start, 17, "absent index on P[17..24] must yield start=17, not 1");
+        assert_eq!(rule.from_end, 24, "absent index on P[17..24] must yield end=24, not 8");
+        assert_eq!(rule.to_port, "Q", "to_port mismatch");
+        assert_eq!(rule.to_start, 1, "absent index on Q[1..8] must yield start=1");
+        assert_eq!(rule.to_end, 8, "absent index on Q[1..8] must yield end=8");
+    }
 }

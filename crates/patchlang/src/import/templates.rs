@@ -179,7 +179,7 @@ mod tests {
         );
         let a = build_template_assignments(&[(n1, d1)]);
         let name = &a.node_to_template["d1"];
-        assert!(name.chars().next().map_or(false, |c| c.is_ascii_alphabetic() || c == '_'));
+        assert!(name.chars().next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_'));
         assert!(name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'));
     }
 }

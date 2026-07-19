@@ -359,8 +359,8 @@ pub fn import_easyschematic(json: &str) -> Result<ImportResult, ImportError> {
         let src_ref = edge.source_port_id.as_deref().and_then(|pid| port_id_to_ref.get(pid));
         let tgt_ref = edge.target_port_id.as_deref().and_then(|pid| port_id_to_ref.get(pid));
 
-        if node_to_instance_name.get(&edge.source_node_id).is_none()
-            || node_to_instance_name.get(&edge.target_node_id).is_none()
+        if !node_to_instance_name.contains_key(&edge.source_node_id)
+            || !node_to_instance_name.contains_key(&edge.target_node_id)
         {
             continue;
         }

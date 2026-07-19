@@ -34,7 +34,7 @@ fn sanitize(s: &str) -> String {
         .chars()
         .map(|c| if c.is_ascii_alphanumeric() || c == '_' { c } else { '_' })
         .collect();
-    if out.is_empty() || out.chars().next().map_or(true, |c| c.is_ascii_digit()) {
+    if out.is_empty() || out.chars().next().is_none_or(|c| c.is_ascii_digit()) {
         out.insert(0, '_');
     }
     out
@@ -233,7 +233,7 @@ pub fn contract_to_hierarchy(
         // compiler drops the out-of-range channels, but promotion through exposed ports turns them
         // into phantom underflowing channels. Keep both endpoints top-level so the mapping resolves
         // exactly as in the flat graph.
-        if c.mapping.as_deref().map_or(false, |m| {
+        if c.mapping.as_deref().is_some_and(|m| {
             let m = m.trim();
             !m.is_empty() && m != "1:1"
         }) {

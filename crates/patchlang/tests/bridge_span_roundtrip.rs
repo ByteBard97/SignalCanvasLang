@@ -7,7 +7,6 @@ use patchlang::builder::{emit_from_canvas_input, load_from_patch};
 use patchlang::builder::canvas_input::*;
 use patchlang::builder::canvas_output::CanvasLoadOutput;
 use std::collections::HashMap;
-use std::fs;
 
 // ---------------------------------------------------------------------------
 // rebuild_input_from_load — copied verbatim from canvas_roundtrip_tests.rs
