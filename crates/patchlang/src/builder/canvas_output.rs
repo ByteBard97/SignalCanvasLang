@@ -171,6 +171,16 @@ pub struct ConnectionLoadOutput {
     pub to_slot: Option<String>,
     /// Raw mapping text from PatchLang (e.g. "offset -8", "1->3, 2->4") for TypeScript to process
     pub mapping_text: Option<String>,
+    /// All `connect { ... }` properties verbatim (cable, length, redundant_cable, …).
+    ///
+    /// `backbone`/`kind`/`from_slot`/`to_slot` are ALSO surfaced as dedicated fields above
+    /// because they drive behaviour; they stay in here too so a round-trip re-emits the
+    /// block unchanged. Previously nothing but those four crossed the boundary, so every
+    /// other property was silently dropped on load. See FrontendV1#202.
+    /// BTreeMap, not HashMap: HashMap iteration order is non-deterministic, which made
+    /// emit -> load -> emit produce the same properties in a different order each run and
+    /// broke idempotency. Sorted by key is stable and predictable.
+    pub properties: std::collections::BTreeMap<String, String>,
 }
 
 #[derive(Debug, Serialize, TS)]

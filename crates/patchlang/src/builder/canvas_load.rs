@@ -470,6 +470,7 @@ pub fn load_from_patch(patch_source: &str, _layout_json: &str) -> Result<CanvasL
         );
 
         connections.push(ConnectionLoadOutput {
+            properties: conn_props.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
             from_instance,
             to_instance,
             from_port,

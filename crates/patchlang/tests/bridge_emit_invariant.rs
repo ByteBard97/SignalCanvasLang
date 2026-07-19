@@ -263,3 +263,37 @@ fn repeated_same_port_bus_inputs_union_channels() {
         "all 24 channels must survive the union, not just the first"
     );
 }
+
+/// Connect properties must survive the load boundary (FrontendV1#202).
+///
+/// Only `backbone`/`kind`/`from_slot`/`to_slot` used to cross; `cable`, `length` and
+/// anything else were dropped, so a round-trip stripped them from the .patch file.
+#[test]
+fn connect_properties_survive_load() {
+    use patchlang::builder::canvas_load::load_from_patch;
+
+    const SRC: &str = r#"
+template Box {
+  ports {
+    Out[1..2]: out(XLR)
+    In[1..2]: in(XLR)
+  }
+}
+instance A is Box {}
+instance B is Box {}
+connect A.Out -> B.In {
+  cable: "Cat6a_SL_Pri"
+  length: "30m"
+}
+"#;
+
+    let out = load_from_patch(SRC, "").expect("load");
+    let conn = out.connections.first().expect("one connection");
+    assert_eq!(
+        conn.properties.get("cable").map(String::as_str),
+        Some("Cat6a_SL_Pri"),
+        "cable property must cross the DTO boundary, got {:?}",
+        conn.properties
+    );
+    assert_eq!(conn.properties.get("length").map(String::as_str), Some("30m"));
+}

@@ -5,4 +5,16 @@ export type ConnectionLoadOutput = { from_instance: string, to_instance: string,
 /**
  * Raw mapping text from PatchLang (e.g. "offset -8", "1->3, 2->4") for TypeScript to process
  */
-mapping_text: string | null, };
+mapping_text: string | null, 
+/**
+ * All `connect { ... }` properties verbatim (cable, length, redundant_cable, …).
+ *
+ * `backbone`/`kind`/`from_slot`/`to_slot` are ALSO surfaced as dedicated fields above
+ * because they drive behaviour; they stay in here too so a round-trip re-emits the
+ * block unchanged. Previously nothing but those four crossed the boundary, so every
+ * other property was silently dropped on load. See FrontendV1#202.
+ * BTreeMap, not HashMap: HashMap iteration order is non-deterministic, which made
+ * emit -> load -> emit produce the same properties in a different order each run and
+ * broke idempotency. Sorted by key is stable and predictable.
+ */
+properties: { [key in string]?: string }, };
