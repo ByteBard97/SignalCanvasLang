@@ -266,7 +266,7 @@ pub(super) fn build_instance_buses(
                     let label = bus
                         .display_name
                         .clone()
-                        .filter(|name| !name.is_empty())
+                        .filter(|name| !name.trim().is_empty())
                         .unwrap_or_else(|| bus_name.clone());
                     vec![BusOutput {
                         label,

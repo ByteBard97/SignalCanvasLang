@@ -773,6 +773,8 @@ Accepted regardless, because every alternative is worse:
 
 **Why `display_name` and not the bus identifier.** `bus_name` is `sanitize_id(&bus.label)`, so a bus the user sees as "Main L/R" would be frozen into the file as `Main_LR`. A bus-output label is quoted free text, not an identifier, so it needs no sanitizing. `display_name` first, sanitized id as fallback.
 
+The emptiness guard trims, matching the frontend: a whitespace-only `display_name` falls through to the identifier rather than emitting a visually blank `output "   "`, which parses but reads as the very thing this decision removes.
+
 This also aligns Rust with the frontend, which already synthesizes `bus.name || "Output"` for empty output names (`emitterAssembly.ts:236-238`, `:99`) — so the two sides now agree rather than only one guarding.
 
 **Reachability.** The path is unreachable from the current frontend: it only leaves `named_outputs` empty when `output_channels` is empty too, which takes the other branch. This is defense-in-depth at the Rust boundary — the emitter and parser must agree regardless of caller — not a live user-facing break.

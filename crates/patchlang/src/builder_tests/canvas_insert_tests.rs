@@ -7,7 +7,6 @@
 //! longer needed" actually means.
 
 use super::canvas_test_helpers::*;
-use crate::builder::canvas_emit::emit_from_canvas_input;
 use crate::builder::canvas_input::*;
 use crate::builder::canvas_load::load_from_patch;
 use crate::builder::insert_endpoints::InsertEndpoint;
@@ -29,13 +28,20 @@ fn console() -> InstanceEmitInput {
     )
 }
 
+/// Emit, and assert the result parses back (#34).
+///
+/// The split-io payload below has empty `named_outputs` with non-empty
+/// `output_channels` — the legacy fallback shape that emitted an unparseable
+/// `output ""`. Checking here covers every insert test rather than one of them.
 fn emit(inst: InstanceEmitInput) -> String {
-    emit_from_canvas_input(CanvasEmitInput {
-        instances: vec![inst],
-        connections: vec![],
-        manufacturer_cards: vec![],
-    })
-    .expect("emit")
+    emit_checked(
+        CanvasEmitInput {
+            instances: vec![inst],
+            connections: vec![],
+            manufacturer_cards: vec![],
+        },
+        "insert emit",
+    )
 }
 
 #[test]

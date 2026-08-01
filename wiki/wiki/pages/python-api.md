@@ -123,6 +123,10 @@ prog.add_instance(instance_json)
 conn_id = prog.add_connect(source_json, target_json, props_json)
 prog.add_route("FOH", "MADI_In", 41, "LINE_Out", 1)
 prog.set_label("FOH", "Dante_In", 1, "Lead Vocal")
+prog.set_label("FOH", "Dante_In", 2, "Kick", {          # optional properties dict
+    "phantom": "true",
+    "insert_send": "Ext_Out[3], Ext_Out[10]",           # channel insert legs (#31)
+})
 prog.remove_connect(conn_id)
 cascade_json = prog.remove_instance("Stage_Left")  # returns cascade JSON string
 

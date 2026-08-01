@@ -100,9 +100,12 @@ pub(super) fn make_artist_with_card() -> InstanceEmitInput {
 /// (unescaped quotes in `emit_bus_entry`) produces output that parses cleanly and
 /// silently truncates the value; this helper is structurally blind to it. Do not
 /// extend this to cover #35 — it needs a different assertion.
-pub(super) fn assert_emit_parses(input: CanvasEmitInput, what: &str) {
+/// Returns the emitted patch, so a test can swap its `emit_from_canvas_input` call for
+/// this one and gain the guard without growing a parallel test.
+pub(super) fn emit_checked(input: CanvasEmitInput, what: &str) -> String {
     let patch = crate::builder::canvas_emit::emit_from_canvas_input(input).expect("emit");
     if let Err(e) = crate::builder::canvas_load::load_from_patch(&patch, "") {
         panic!("emit produced text that load_from_patch rejects ({what}): {e}\n--- emitted ---\n{patch}");
     }
+    patch
 }

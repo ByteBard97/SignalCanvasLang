@@ -59,7 +59,11 @@ output_interface: "AES67_Out".into(),
         connections: vec![],
         manufacturer_cards: vec![make_aes67_card()],
     };
-    let patch = emit_from_canvas_input(input).unwrap();
+    // Parse-checked: this payload has empty `named_outputs` with non-empty
+    // `output_channels`, the shape that emitted `output ""` and could not be read back
+    // (#34). It was producing that malformed text for as long as it has existed —
+    // invisible because the assertions below only check containment.
+    let patch = emit_checked(input, "bus on card-slot port (legacy output fallback)");
     assert!(
         patch.contains("bus Card_Mix"),
         "bus on card-slot port must be emitted:\n{patch}"
@@ -510,39 +514,6 @@ fn cross_instance_route_survives_roundtrip() {
 // ---------------------------------------------------------------------------
 // #34 — emit must produce text our own parser accepts
 // ---------------------------------------------------------------------------
-
-/// The legacy bus-output fallback: no `named_outputs`, but non-empty `output_channels`.
-///
-/// This shape emitted `output ""`, which `parse_bus_entry` rejects — so the emitter was
-/// producing a .patch it could not read back. `emit_bus_with_card_slot_input_port` above
-/// uses this exact shape and stayed green throughout, because it asserts only on port
-/// names and never parses the result.
-///
-/// **This test is the sole mutation-sensitive guard for #34.** Reverting the synthesized
-/// label to `String::new()` must make it fail; the containment-only tests will not.
-#[test]
-fn legacy_bus_output_fallback_emits_parseable_patch() {
-    let mut inst = make_artist_with_card();
-    inst.internal_buses = vec![BusEmitInput {
-        label: "Card_Mix".into(),
-        display_name: None,
-        input_interface: "AES67_Out".into(),
-        input_channels: vec![1, 2],
-        input_groups: vec![],
-        output_interface: "AES67_Out".into(),
-        output_channels: vec![3, 4],
-        named_outputs: vec![],
-        ..Default::default()
-    }];
-    assert_emit_parses(
-        CanvasEmitInput {
-            instances: vec![inst],
-            connections: vec![],
-            manufacturer_cards: vec![make_aes67_card()],
-        },
-        "legacy bus output fallback (empty named_outputs, non-empty output_channels)",
-    );
-}
 
 /// The synthesized label prefers `display_name` over the sanitized identifier, so a bus
 /// shown as "Main L/R" is not frozen into the file as "Main_LR".
