@@ -244,8 +244,32 @@ pub(super) fn build_instance_buses(
                             }),
                         })
                         .collect();
+                    // A bus output label must be non-empty — `parse_bus_entry` rejects
+                    // `output ""` (the rule arrived with the named-output syntax, D017).
+                    // Emitting an empty one produced a .patch our own parser refused, so
+                    // any canvas round-trip through this legacy path was broken (#34).
+                    //
+                    // The synthesized name is user-visible and permanent, not internal
+                    // plumbing — see D024. It becomes `BusNamedOutput.name` on load and
+                    // shows in the bus manager; and because the next load then yields a
+                    // non-empty `named_outputs`, the modern branch takes over and the
+                    // name sticks. Accepted anyway: emitting nothing would silently drop
+                    // the routing and erroring would break saves, so a visible,
+                    // predictable, editable name is the least-bad option. It also matches
+                    // the frontend, which already falls back to the bus name and then
+                    // "Output" (emitterAssembly.ts:236-238, :99).
+                    //
+                    // Prefer `display_name` over `bus_name`: `bus_name` is
+                    // `sanitize_id(&bus.label)`, so a bus shown as "Main L/R" would be
+                    // frozen as "Main_LR". A label is quoted free text, not an
+                    // identifier, so it needs no sanitizing.
+                    let label = bus
+                        .display_name
+                        .clone()
+                        .filter(|name| !name.is_empty())
+                        .unwrap_or_else(|| bus_name.clone());
                     vec![BusOutput {
-                        label: String::new(),
+                        label,
                         destinations: dests,
                         span: builder_span(),
                     }]

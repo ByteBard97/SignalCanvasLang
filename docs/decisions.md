@@ -745,3 +745,40 @@ The `unwrap_or_else(sanitize_id)` fallback is load-bearing and retained: already
 **Affects:** `SPEC.md` (§3.10 config), `docs/language-reference.md` (bus entry), `builder/insert_endpoints.rs`, `builder/canvas_{input,output,load}.rs`, `canvas_emit/{mod,routes}.rs`, `ast.rs`, `body_parser.rs`, `formatter_emit.rs`, `compat{,_types}.rs`.
 
 **Related issues:** ByteBard97/SignalCanvasLang#31
+
+---
+
+### D024 — Synthesized Label for the Legacy Bus-Output Fallback
+**2026-08-01** | **Decided**
+
+**Question:** The canvas emitter's legacy bus-output path produced `output ""`, which our own parser rejects. What should it emit instead, given that whatever we choose becomes user-visible and permanent?
+
+**Decision:** Emit the bus's `display_name`, falling back to the sanitized bus identifier. Not an empty string, not a generic constant, and not nothing.
+
+**The defect.** When a `BusEmitInput` has no `named_outputs` but non-empty `output_channels`, `build_instance_buses` falls back to a single unnamed output with `label: String::new()`. `emit_bus_entry` writes that as `output ""`, and `parse_bus_entry` rejects an empty bus-output label — a rule introduced with the named-output syntax (D017). So the emitter produced a `.patch` it could not read back, and any canvas round-trip through that path was broken.
+
+**This is a data decision, not cosmetics.** The synthesized label is not internal plumbing:
+
+1. On load it becomes `BusNamedOutput.name` (`canvas_load.rs`), which surfaces in the frontend's bus manager as a named output the user never created.
+2. It is **self-perpetuating**: once emitted, the next load yields a non-empty `named_outputs`, so the modern branch takes over and the synthesized name is permanent in the file.
+
+Accepted regardless, because every alternative is worse:
+
+| Option | Consequence |
+|--------|-------------|
+| Keep `""` | Emitter produces unparseable text; round-trip silently broken |
+| Emit nothing | Silently drops the routing — data loss |
+| Error on emit | Breaks saves for anyone on the legacy path |
+| **Synthesize a name** | One user-visible, predictable, editable label |
+
+**Why `display_name` and not the bus identifier.** `bus_name` is `sanitize_id(&bus.label)`, so a bus the user sees as "Main L/R" would be frozen into the file as `Main_LR`. A bus-output label is quoted free text, not an identifier, so it needs no sanitizing. `display_name` first, sanitized id as fallback.
+
+This also aligns Rust with the frontend, which already synthesizes `bus.name || "Output"` for empty output names (`emitterAssembly.ts:236-238`, `:99`) — so the two sides now agree rather than only one guarding.
+
+**Reachability.** The path is unreachable from the current frontend: it only leaves `named_outputs` empty when `output_channels` is empty too, which takes the other branch. This is defense-in-depth at the Rust boundary — the emitter and parser must agree regardless of caller — not a live user-facing break.
+
+**Verified:** two legacy-fallback buses on one device emit distinct labels, parse cleanly, and produce **no** duplicate-bus-output-label diagnostic (the DRC's `seen_labels` resets per bus, and the legacy branch emits exactly one output per bus).
+
+**Related:** #34. See also #35 — `formatter_emit` escapes nothing, so a `display_name` containing a quote is silently truncated. That is a separate defect in the same function; this decision does not address it, and a `display_name` with a quote will now reach it via this path.
+
+**Affects:** `builder/canvas_emit/routes.rs`, `builder_tests/canvas_bus_route_tests.rs`, `builder_tests/canvas_test_helpers.rs`.

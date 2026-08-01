@@ -85,3 +85,24 @@ pub(super) fn make_artist_with_card() -> InstanceEmitInput {
     }];
     inst
 }
+
+/// Assert that whatever `emit_from_canvas_input` produces, `load_from_patch` accepts.
+///
+/// The emitter and the parser must agree. They did not: a bus with no `named_outputs`
+/// but non-empty `output_channels` took the legacy fallback, which emitted `output ""`,
+/// and `parse_bus_entry` rejects an empty bus-output label — so canvas round-tripping
+/// through that path was broken (#34).
+///
+/// Existing bus tests could not catch it because they assert only `patch.contains(...)`
+/// and never parse the result back. They were producing the malformed text all along.
+///
+/// NOTE — this catches "does it parse", NOT "does the value survive". Issue #35
+/// (unescaped quotes in `emit_bus_entry`) produces output that parses cleanly and
+/// silently truncates the value; this helper is structurally blind to it. Do not
+/// extend this to cover #35 — it needs a different assertion.
+pub(super) fn assert_emit_parses(input: CanvasEmitInput, what: &str) {
+    let patch = crate::builder::canvas_emit::emit_from_canvas_input(input).expect("emit");
+    if let Err(e) = crate::builder::canvas_load::load_from_patch(&patch, "") {
+        panic!("emit produced text that load_from_patch rejects ({what}): {e}\n--- emitted ---\n{patch}");
+    }
+}
