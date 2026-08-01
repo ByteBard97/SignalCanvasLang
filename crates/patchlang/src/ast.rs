@@ -295,6 +295,17 @@ pub struct BusEntry {
     pub label: Option<String>,
     pub inputs: Vec<PortRef>,
     pub outputs: Vec<BusOutput>,
+    /// Bus insert legs — ordered, `[L]` mono, `[L, R]` stereo (issue #31).
+    ///
+    /// `#[serde(default)]` is REQUIRED, not cosmetic: `patchlang-wasm`'s `add_bus` and
+    /// `update_bus` deserialize `BusEntry` *directly* from frontend JSON rather than
+    /// going through a `*EmitInput` DTO. Without the default, serde rejects the whole
+    /// payload with "missing field `insert_send`" and every existing frontend build
+    /// breaks the moment this ships.
+    #[serde(default)]
+    pub insert_send: Vec<PortRef>,
+    #[serde(default)]
+    pub insert_return: Vec<PortRef>,
     pub span: Span,
 }
 

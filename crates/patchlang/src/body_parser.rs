@@ -121,7 +121,33 @@ impl<'a> Parser<'a> {
         let mut label: Option<String> = None;
         let mut inputs = Vec::new();
         let mut outputs = Vec::new();
+        let mut insert_send: Vec<PortRef> = Vec::new();
+        let mut insert_return: Vec<PortRef> = Vec::new();
         while self.peek() != Some(&Token::RBrace) && !self.at_end() {
+            // Insert legs (#31): `insert_send: Port[1], Port[2]`. Order is significant
+            // ([L, R]) and a port may legitimately repeat, so the list is kept flat —
+            // never grouped or channel-unioned the way bus inputs are downstream.
+            //
+            // These lex as plain `Token::Identifier` — `insert_send`/`insert_return`
+            // are not lexer keywords — so no new token is needed. Note they had to be
+            // added HERE: the catch-all arm below is `_ => { self.advance(); continue }`,
+            // which means on Lang <= 0.3.1 an `insert_send:` line inside `bus { }` is
+            // silently token-skipped with no error at all. Frontends writing this
+            // syntax need a minimum-Lang-version guard.
+            if let Some(Token::Identifier(id)) = self.peek().cloned() {
+                if id == "insert_send" || id == "insert_return" {
+                    self.advance();
+                    self.expect(&Token::Colon);
+                    let target =
+                        if id == "insert_send" { &mut insert_send } else { &mut insert_return };
+                    target.push(self.parse_port_ref());
+                    while self.peek() == Some(&Token::Comma) {
+                        self.advance();
+                        target.push(self.parse_port_ref());
+                    }
+                    continue;
+                }
+            }
             let direction = match self.peek().cloned() {
                 Some(Token::Label) => {
                     self.advance(); // consume 'label'
@@ -227,7 +253,10 @@ impl<'a> Parser<'a> {
         for input in &inputs {
             reject_auto_in_index(&input.index, &span, &mut self.errors, "bus");
         }
-        BusEntry { name, label, inputs, outputs, span }
+        for leg in insert_send.iter().chain(insert_return.iter()) {
+            reject_auto_in_index(&leg.index, &span, &mut self.errors, "bus");
+        }
+        BusEntry { name, label, inputs, outputs, insert_send, insert_return, span }
     }
 
     /// Parse `slot Name[index]: "CardType"` inside instance body.

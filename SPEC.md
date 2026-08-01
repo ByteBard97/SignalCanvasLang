@@ -205,6 +205,8 @@ instance FOH_Console is CL5(mic_count: 48) @version(">=4.0") {
   route Dante_In[2] -> Fader[2]
   bus Main_LR {
     input: Fader[1..8]
+    insert_send: Ext_Out[3], Ext_Out[10]
+    insert_return: Ext_In[4], Ext_In[8]
     output: Matrix_Out[1..2]
   }
   slot MY_Slot[1]: "Dante_Card"
@@ -354,6 +356,33 @@ config FOH_Console {
   label Fader[1]: "Lead Vocal"
 }
 ```
+
+#### Channel Inserts
+
+`insert_send` / `insert_return` break a channel out to an external processor and back.
+Their value is a **quoted, comma-separated list of port references**, one per leg —
+`[L]` mono, `[L, R]` stereo:
+
+```
+config FOH_Console {
+  label Mic_In[1]: "Kick" {
+    insert_send: "Ext_Out[3], Ext_Out[10]"
+    insert_return: "Ext_In[4], Ext_In[8]"
+  }
+}
+```
+
+Order is significant (reversing the list swaps the stereo image), legs are independent
+(no adjacency or equal-width constraint), and each leg carries a single-channel index —
+a range such as `Ext_Out[1..2]` is not accepted.
+
+**Quote the value.** A property value written bare (`insert_send: Ext_Out[3]`) parses as
+a single port reference and can carry only one leg; the quoted string form is canonical
+and is what the compiler emits. See the [bus insert](docs/language-reference.md) syntax
+for the equivalent on buses, which uses native grammar rather than a string because a
+bus has no property block.
+
+Added in PatchLang v0.3.2.
 
 ### 3.11 Use Declaration
 

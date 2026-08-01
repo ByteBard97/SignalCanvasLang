@@ -290,6 +290,7 @@ output_interface: "".into(),
             BusOutputEmitInput { instance: None, name: "Ch 1".into(), interface: "QLAN_Out".into(), channels: vec![1] },
             BusOutputEmitInput { instance: None, name: "Ch 2".into(), interface: "QLAN_Out".into(), channels: vec![2] },
         ],
+    ..Default::default()
     }];
     let patch = emit_from_canvas_input(CanvasEmitInput {
         instances: vec![inst],
@@ -376,6 +377,7 @@ output_interface: "".into(),
                 channels: vec![1],
             },
         ],
+    ..Default::default()
     }];
 
     let patch = emit_from_canvas_input(CanvasEmitInput {

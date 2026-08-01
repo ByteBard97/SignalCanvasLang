@@ -8,4 +8,14 @@ export type BusEntry = { name: string,
  * Human-readable display name. May contain characters invalid in identifiers
  * (e.g. `"SPOTIFY>FOH"`). The `name` field remains the stable cross-reference key.
  */
-label: string | null, inputs: Array<PortRef>, outputs: Array<BusOutput>, span: Span, };
+label: string | null, inputs: Array<PortRef>, outputs: Array<BusOutput>, 
+/**
+ * Bus insert legs — ordered, `[L]` mono, `[L, R]` stereo (issue #31).
+ *
+ * `#[serde(default)]` is REQUIRED, not cosmetic: `patchlang-wasm`'s `add_bus` and
+ * `update_bus` deserialize `BusEntry` *directly* from frontend JSON rather than
+ * going through a `*EmitInput` DTO. Without the default, serde rejects the whole
+ * payload with "missing field `insert_send`" and every existing frontend build
+ * breaks the moment this ships.
+ */
+insert_send: Array<PortRef>, insert_return: Array<PortRef>, span: Span, };

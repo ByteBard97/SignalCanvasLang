@@ -675,10 +675,12 @@ route-entry = "route" port-ref-or-local "->" port-ref-or-local ;
 ```ebnf
 bus-entry        = "bus" identifier "{" [ bus-label ] { bus-port-entry } "}" ;
 bus-label        = "label" ":" string-literal ;
-bus-port-entry   = bus-input-entry | bus-output-entry ;
+bus-port-entry   = bus-input-entry | bus-output-entry | bus-insert-entry ;
 bus-input-entry  = ( "input" | "in" ) ":" port-ref-or-local ;
 bus-output-entry = ( "output" | "out" ) string-literal
                    [ ":" port-ref-or-local { "," port-ref-or-local } ] ;
+bus-insert-entry = ( "insert_send" | "insert_return" ) ":"
+                   port-ref-or-local { "," port-ref-or-local } ;
 ```
 
 The optional `label` property stores a human-readable display name that may contain characters
@@ -719,6 +721,41 @@ bus Drums {
 ```
 
 Cross-device refs are passed through without S05 validation — the port belongs to the target device's template, not the owning instance's.
+
+#### Bus Inserts
+
+`insert_send` and `insert_return` break the bus out to an external processor and back.
+Because the signal physically leaves the console, these are real signal flow and live in
+`.patch` rather than the layout sidecar.
+
+```
+bus Main_LR {
+  input: Fader[1..8]
+  insert_send: Ext_Out[3], Ext_Out[10]
+  insert_return: Ext_In[4], Ext_In[8]
+  output "Main L": Matrix_Out[1]
+  output "Main R": Matrix_Out[2]
+}
+```
+
+Each entry is an **ordered** list of legs — one leg for a mono insert, two for stereo
+(`[L, R]`). Order is significant: reversing the list swaps the stereo image.
+
+Legs are **independent**. There is no adjacency or equal-width constraint, so the
+scattered patches that occur in practice are representable — a send on MADI 3 and 10
+returning on MADI 4 and 8 is valid, and a send list may be a different length than its
+return list. Unlike bus `input:` entries, insert legs are never grouped by port or
+channel-unioned; a port may legitimately repeat across legs.
+
+An insert is a **detour, not a destination** — the legs do not appear among the bus's
+inputs or outputs, and signal tracing treats them as a hop rather than a new path.
+
+Each leg must carry a single-channel index. A range (`Ext_Out[1..2]`) is not accepted;
+write the legs out individually so the width stays explicit.
+
+> **Version note.** Added in PatchLang v0.3.2. On earlier compilers an `insert_send:`
+> line inside `bus { }` is silently skipped by the parser's catch-all — no error is
+> raised and the data is lost. Tools writing this syntax should require v0.3.2+.
 
 ---
 

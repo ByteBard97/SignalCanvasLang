@@ -269,6 +269,38 @@ pub fn emit_from_canvas_input(input: CanvasEmitInput) -> Result<String, BuilderE
                         props.insert("rf_band".into(), band.clone());
                     }
                 }
+                // Insert legs (#31). No precedence rule is needed against the verbatim
+                // bag below: a key is carried by the typed field OR the bag, never both
+                // (see ChannelLabelOutput::properties), so these cannot collide.
+                //
+                // A send leaves the device and a return comes back into it, so the two
+                // lists resolve with opposite sides — an io interface such as MADI
+                // splits into MADI_Out / MADI_In and the legs must land on the right
+                // one. See `insert_legs_to_port_refs`.
+                for (key, legs, side) in [
+                    ("insert_send", &label.insert_send, PortSide::Output),
+                    ("insert_return", &label.insert_return, PortSide::Input),
+                ] {
+                    if legs.is_empty() {
+                        continue;
+                    }
+                    props.insert(
+                        key.into(),
+                        format_resolved_insert_legs(
+                            legs,
+                            side,
+                            &inst.interfaces,
+                            &inst.installed_cards,
+                            &input.manufacturer_cards,
+                            &input.instances,
+                        ),
+                    );
+                }
+                // Everything with no dedicated field, verbatim — the mechanism that
+                // stops unknown label keys being silently dropped on the next load.
+                for (key, value) in &label.properties {
+                    props.insert(key.clone(), value.clone());
+                }
                 builder.set_label(
                     &inst.name,
                     &port_name,
@@ -393,7 +425,13 @@ fn build_instance_decl(inst: &InstanceEmitInput, template_name: &str, manufactur
         manufacturer_cards,
         all_instances,
     );
-    let buses = build_instance_buses(&inst.internal_buses, &inst.interfaces);
+    let buses = build_instance_buses(
+        &inst.internal_buses,
+        &inst.interfaces,
+        &inst.installed_cards,
+        manufacturer_cards,
+        all_instances,
+    );
 
     InstanceDecl {
         name: inst.name.clone(),

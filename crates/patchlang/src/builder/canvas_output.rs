@@ -1,6 +1,7 @@
 //! Output types for the PatchLang → canvas load direction.
 //! Rust parses .patch text; TypeScript maps this to PlacedDevice[].
 
+use super::insert_endpoints::InsertEndpoint;
 use serde::Serialize;
 use std::collections::HashMap;
 use ts_rs::TS;
@@ -78,7 +79,7 @@ pub struct InstalledCardOutput {
     pub card_template_name: String,
 }
 
-#[derive(Debug, Serialize, TS)]
+#[derive(Debug, Default, Serialize, TS)]
 #[ts(export)]
 pub struct ChannelLabelOutput {
     pub channel_index: u32,
@@ -88,6 +89,29 @@ pub struct ChannelLabelOutput {
     pub source_type: Option<String>,
     pub capsule: Option<String>,
     pub rf_band: Option<String>,
+    /// Channel insert legs — ordered, `[L]` mono, `[L, R]` stereo. See issue #31 and
+    /// `builder::insert_endpoints`. Order is significant; never grouped or unioned.
+    /// Empty means absent — a plain `Vec` rather than `Option<Vec>` because ts-rs
+    /// ignores `skip_serializing_if` and the `Option` would need `#[ts(optional)]`
+    /// to stay honest (see `skip_serialized_option_fields_are_ts_optional` below).
+    pub insert_send: Vec<InsertEndpoint>,
+    pub insert_return: Vec<InsertEndpoint>,
+    /// Every label property that has no dedicated field above, verbatim.
+    ///
+    /// Without this, any key outside the fixed struct was silently dropped on load —
+    /// the reason `insert`/`stand`/`gain` had to live in the layout sidecar (#31).
+    ///
+    /// Deliberately UNLIKE `ConnectionLoadOutput::properties`, which also keeps the
+    /// keys that have dedicated fields: `is_backbone` and friends are a *lossless*
+    /// re-read of their string, whereas `insert_send`'s typed field is a *lossy parse*.
+    /// If both carried it and the typed field won on re-emit, a malformed-but-intact
+    /// source string would be blanked by the very fix meant to preserve it. So a key
+    /// lives in exactly one place: parsed cleanly → typed field, key removed here;
+    /// malformed → typed field empty, key stays here and re-emits byte-for-byte.
+    ///
+    /// BTreeMap, not HashMap: HashMap iteration order is non-deterministic, which makes
+    /// emit → load → emit reorder properties each run and breaks idempotency.
+    pub properties: std::collections::BTreeMap<String, String>,
 }
 
 #[derive(Debug, Serialize, TS)]
@@ -135,6 +159,14 @@ pub struct BusOutput {
     pub input_channels: Vec<u32>,
     pub input_groups: Vec<BusInputGroup>,
     pub named_outputs: Vec<BusNamedOutput>,
+    /// Bus insert legs — ordered, `[L]` mono, `[L, R]` stereo. See issue #31.
+    ///
+    /// Unlike `input_groups`/`named_outputs` above, these are NOT grouped by
+    /// `(instance, port)` and NOT channel-unioned. Bus inputs are set-like so grouping
+    /// them is correct; insert legs are an ordered list where a port legitimately
+    /// repeats (`send: MADI[3], MADI[10]`), so grouping would reorder the stereo pair.
+    pub insert_send: Vec<InsertEndpoint>,
+    pub insert_return: Vec<InsertEndpoint>,
 }
 
 #[derive(Debug, Serialize, TS)]

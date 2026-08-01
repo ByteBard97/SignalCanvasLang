@@ -272,6 +272,8 @@ fn roundtrip_preserves_routes_and_buses() {
             span: span(),
         }],
         span: span(),
+    insert_send: vec![],
+    insert_return: vec![],
     };
     b.add_bus("SL_Rack", bus).unwrap();
 

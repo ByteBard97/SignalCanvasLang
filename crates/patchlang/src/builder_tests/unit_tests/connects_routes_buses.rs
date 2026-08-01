@@ -184,6 +184,8 @@ fn add_bus_to_instance() {
             span: default_span(),
         }],
         span: default_span(),
+    insert_send: vec![],
+    insert_return: vec![],
     };
     b.add_bus("SL", bus).unwrap();
     let buses = &b.get_instance("SL").unwrap().buses;
@@ -207,6 +209,8 @@ fn bus_with_unrouted_output() {
             span: default_span(),
         }],
         span: default_span(),
+    insert_send: vec![],
+    insert_return: vec![],
     };
     b.add_bus("SL", bus).unwrap();
     let buses = &b.get_instance("SL").unwrap().buses;
@@ -225,6 +229,8 @@ fn remove_bus_by_name() {
         inputs: vec![],
         outputs: vec![],
         span: default_span(),
+    insert_send: vec![],
+    insert_return: vec![],
     };
     b.add_bus("SL", bus).unwrap();
     b.remove_bus("SL", "PA").unwrap();

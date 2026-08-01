@@ -126,6 +126,7 @@ fn rebuild_input_from_load(loaded: &CanvasLoadOutput) -> CanvasEmitInput {
                     source_type: cl.source_type.clone(),
                     capsule: cl.capsule.clone(),
                     rf_band: cl.rf_band.clone(),
+                    ..Default::default()
                 }).collect();
                 (port.clone(), emit_labels)
             })
@@ -183,6 +184,7 @@ fn rebuild_input_from_load(loaded: &CanvasLoadOutput) -> CanvasEmitInput {
                     .map(|o| o.output_channels.clone())
                     .unwrap_or_default(),
                 named_outputs,
+            ..Default::default()
             }
         }).collect();
 

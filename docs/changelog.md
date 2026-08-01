@@ -6,6 +6,18 @@ permalink: /changelog/
 
 ## Revision History
 
+### v0.3.2 — 2026-08-01 (inserts round-trip)
+
+- **Channel and bus inserts are now first-class PatchLang.** An insert breaks a channel or bus out to an external send/return path; because the signal physically leaves the console, the endpoints are real signal flow. They previously lived in the frontend's `.layout.json` sidecar because the canvas DTO could not round-trip them. Resolves issue #31.
+- **New bus grammar:** `insert_send:` / `insert_return:` inside `bus { }`, taking a comma-separated list of port references. Buses have no property block, so this is native syntax.
+- **New channel-label property:** `insert_send` / `insert_return` on a `config` label, as a *quoted* comma-separated port-reference list. Label property values are key/value only, so a multi-leg list has to be a string.
+- **Leg lists are ordered and independent.** `[L]` mono, `[L, R]` stereo; order is significant. No adjacency or equal-width constraint, so scattered patches (send on 3 and 10, return on 4 and 8) are representable. Unlike bus `input:` entries, legs are never grouped by port or channel-unioned. Each leg must carry a single-channel index — ranges are rejected rather than silently expanded.
+- **`ChannelLabelOutput` gained a verbatim `properties` bag.** Any label property with no dedicated field used to be silently dropped on load — the reason `insert`, `stand` and `gain` needed the sidecar. Now every unknown key survives the round-trip. Same class of fix as the connect-properties work in v0.3.1.
+- **Bug fix — port-ref-valued properties were silently dropped.** `kv_map` returned `None` for `KvValue::PortRef`, so an unquoted property such as `insert_send: Ext_Out[3]` parsed cleanly and then vanished at the DTO boundary. It is now stringified, matching `graph::kv_to_string_map`. This affected *all* label properties, not just inserts.
+- **`BusOutput`, `BusEntry`, `BusEmitInput`, `ChannelLabelEmitInput` and `TsBusDecl`** all carry the new fields. All new deserialized fields are `#[serde(default)]`, so payloads from older frontends still load — `patchlang-wasm`'s `add_bus`/`update_bus` deserialize `ast::BusEntry` directly from frontend JSON, where a missing field would otherwise reject the whole payload.
+- **Compatibility note:** on v0.3.1 and earlier, an `insert_send:` line inside `bus { }` is silently skipped by the parser's catch-all — no error, data lost. Tools writing this syntax should require v0.3.2+.
+- **Test coverage:** 34 new tests (11 encoder/decoder unit, 18 load round-trip, 5 full canvas emit→load) plus a new `11-inserts.patch` fixture with 3 fixture tests. Total: 923 tests.
+
 ### v0.2.12 — 2026-05-22 (network construct)
 
 - **`network` top-level construct added.** Declares L2 switched-fabric domain membership for Dante, SoundGrid, AVB, Milan, and AES67 protocols. Parallel to `ring` but unordered — any member can reach any other member.

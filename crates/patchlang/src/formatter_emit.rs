@@ -486,6 +486,23 @@ fn emit_bus_entry(out: &mut String, bus: &BusEntry, indent: &str) {
         emit_port_ref(out, input);
         out.push('\n');
     }
+    // Insert legs after the inputs, before the outputs — send/return read as a detour
+    // off the bus, not as another destination (#31).
+    for (key, legs) in [("insert_send", &bus.insert_send), ("insert_return", &bus.insert_return)] {
+        if legs.is_empty() {
+            continue;
+        }
+        out.push_str(&inner);
+        out.push_str(key);
+        out.push_str(": ");
+        for (i, leg) in legs.iter().enumerate() {
+            if i > 0 {
+                out.push_str(", ");
+            }
+            emit_port_ref(out, leg);
+        }
+        out.push('\n');
+    }
     for output in &bus.outputs {
         out.push_str(&inner);
         out.push_str("output \"");

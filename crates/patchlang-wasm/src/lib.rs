@@ -310,6 +310,13 @@ pub fn set_slot(
 /// ```
 /// An unrouted output has `"destinations": []`.
 /// `"label"` on the bus itself is an optional display name; pass `null` if not needed.
+///
+/// Optional `"insert_send"` / `"insert_return"` carry the bus's insert legs (issue #31)
+/// as arrays of the same port-ref shape as `"inputs"`. Both default to `[]`, so payloads
+/// written against an earlier version still deserialize. Order is significant — `[L]`
+/// mono, `[L, R]` stereo — and the legs are never grouped or channel-unioned the way
+/// `"inputs"` are, so a port may legitimately repeat. Each leg needs a single-channel
+/// index; ranges are not accepted.
 #[wasm_bindgen]
 pub fn add_bus(handle: u32, instance: &str, bus_json: &str) -> String {
     let bus: patchlang::ast::BusEntry = match serde_json::from_str(bus_json) {
@@ -635,6 +642,13 @@ pub fn clear_routes(handle: u32, instance: &str) -> String {
 /// ```
 /// An unrouted output has `"destinations": []`.
 /// `"label"` on the bus itself is an optional display name; pass `null` if not needed.
+///
+/// Optional `"insert_send"` / `"insert_return"` carry the bus's insert legs (issue #31)
+/// as arrays of the same port-ref shape as `"inputs"`. Both default to `[]`, so payloads
+/// written against an earlier version still deserialize. Order is significant — `[L]`
+/// mono, `[L, R]` stereo — and the legs are never grouped or channel-unioned the way
+/// `"inputs"` are, so a port may legitimately repeat. Each leg needs a single-channel
+/// index; ranges are not accepted.
 #[wasm_bindgen]
 pub fn update_bus(handle: u32, instance: &str, bus_name: &str, bus_json: &str) -> String {
     let bus: patchlang::ast::BusEntry = match serde_json::from_str(bus_json) {

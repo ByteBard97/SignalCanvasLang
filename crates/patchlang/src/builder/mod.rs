@@ -9,6 +9,7 @@ pub mod canvas_input;
 pub mod canvas_load;
 pub mod canvas_output;
 pub mod error;
+pub mod insert_endpoints;
 mod config;
 mod connections;
 mod instances;

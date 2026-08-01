@@ -268,6 +268,12 @@ pub struct TsBusDecl {
     pub label: Option<String>,
     pub inputs: Vec<TsPortRef>,
     pub outputs: Vec<TsBusOutput>,
+    /// Bus insert legs — ordered, `[L]` mono, `[L, R]` stereo (issue #31).
+    /// Omitted when empty so existing consumers of this compat shape are unaffected.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub insert_send: Vec<TsPortRef>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub insert_return: Vec<TsPortRef>,
 }
 
 #[derive(Debug, Clone, Serialize)]

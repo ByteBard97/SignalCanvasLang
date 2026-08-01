@@ -52,6 +52,7 @@ fn emit_bus_with_card_slot_input_port() {
 output_interface: "AES67_Out".into(),
         output_channels: vec![3, 4],
         named_outputs: vec![],
+        ..Default::default()
     }];
     let input = CanvasEmitInput {
         instances: vec![inst],
@@ -224,6 +225,7 @@ fn emit_bus_named_output_without_destination_omits_port_ref() {
             BusOutputEmitInput { instance: None, name: "Link 1-L".into(), interface: "".into(), channels: vec![] },
             BusOutputEmitInput { instance: None, name: "Link 1-R".into(), interface: "".into(), channels: vec![] },
         ],
+    ..Default::default()
     }];
     let input = CanvasEmitInput {
         instances: vec![inst],
@@ -276,6 +278,7 @@ output_interface: "".into(),
                 channels: vec![2],
             },
         ],
+    ..Default::default()
     }];
     let input = CanvasEmitInput {
         instances: vec![inst],

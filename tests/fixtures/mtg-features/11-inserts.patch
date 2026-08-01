@@ -1,0 +1,102 @@
+# MTG Feature Test: Channel and bus inserts (issue #31)
+#
+# An insert breaks a channel or bus out to an external processor and back. Because the
+# signal physically leaves the console it is real signal flow and belongs in .patch,
+# not the layout sidecar.
+#
+# The two carriers use different syntax for a structural reason: a channel label has a
+# key/value property block (so the leg list is a quoted string), while a bus has no
+# property block at all (so it gets native grammar).
+
+template Console_32 {
+  meta {
+    kind: "device"
+    model: "Console 32"
+  }
+  ports {
+    Mic_In[1..32]: in(XLR) [Analogue]
+    Ext_Out[1..16]: out(XLR) [Analogue]
+    Ext_In[1..16]: in(XLR) [Analogue]
+    MADI_Out[1..64]: out(BNC) [MADI]
+    MADI_In[1..64]: in(BNC) [MADI]
+    Matrix_Out[1..8]: out(XLR) [Analogue]
+  }
+}
+
+instance FOH_Console is Console_32 {
+  location: "Front of House"
+
+  # Mono bus insert — one leg each way.
+  bus Vocal_Group {
+    label: "Vocal Group"
+    input: Mic_In[1]
+    insert_send: Ext_Out[1]
+    insert_return: Ext_In[1]
+    output "Vox": Matrix_Out[1]
+  }
+
+  # Stereo bus insert — [L, R]. Order is significant.
+  bus Main_LR {
+    label: "Main L/R"
+    input: Mic_In[2]
+    insert_send: Ext_Out[5], Ext_Out[6]
+    insert_return: Ext_In[5], Ext_In[6]
+    output "Main L": Matrix_Out[3]
+    output "Main R": Matrix_Out[4]
+  }
+
+  # Scattered legs — the real-world case. Endpoints are independent: no adjacency
+  # constraint, and the send list need not be the same length as the return list.
+  bus Drum_Sub {
+    label: "Drum Subgroup"
+    input: Mic_In[3]
+    insert_send: MADI_Out[3], MADI_Out[10]
+    insert_return: MADI_In[4], MADI_In[8]
+    output "Drums": Matrix_Out[5]
+  }
+
+  # Interleaved ports — legs must stay a flat ordered list. Grouping this by port
+  # (the way bus INPUTS are grouped) would reorder it to [1, 2, 1] and swap the pair.
+  bus Interleaved {
+    input: Mic_In[4]
+    insert_send: Ext_Out[1], MADI_Out[1], Ext_Out[2]
+    output "Out": Matrix_Out[6]
+  }
+}
+
+config FOH_Console {
+  # Mono channel insert.
+  label Mic_In[1]: "Kick" {
+    phantom: "false"
+    insert_send: "Ext_Out[3]"
+    insert_return: "Ext_In[3]"
+  }
+
+  # Stereo channel insert — quoted, comma-separated, order significant.
+  label Mic_In[2]: "Playback L" {
+    insert_send: "Ext_Out[7], Ext_Out[8]"
+    insert_return: "Ext_In[7], Ext_In[8]"
+  }
+
+  # Scattered: send on MADI 3 and 10, return on MADI 4 and 8.
+  label Mic_In[3]: "Snare Top" {
+    phantom: "true"
+    insert_send: "MADI_Out[3], MADI_Out[10]"
+    insert_return: "MADI_In[4], MADI_In[8]"
+  }
+
+  # A send with no return — legs are independent, so this is legal.
+  label Mic_In[4]: "Hat" {
+    insert_send: "Ext_Out[9]"
+  }
+
+  # Insert alongside other label properties, including keys with no dedicated field.
+  # These ride the verbatim property bag rather than being dropped on load.
+  label Mic_In[5]: "Lead Vocal" {
+    phantom: "true"
+    capsule: "KSM8"
+    stand: "tall boom"
+    insert_send: "Ext_Out[11], Ext_Out[12]"
+    insert_return: "Ext_In[11], Ext_In[12]"
+  }
+}

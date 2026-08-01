@@ -933,3 +933,86 @@ fn multi_file_hillsong_mini_no_trace_warnings() {
         diags
     );
 }
+
+// ---------------------------------------------------------------------------
+// 11-inserts.patch — channel and bus inserts (issue #31)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn mtg_inserts_fixture_parses_cleanly() {
+    let result = parse_mtg_fixture("11-inserts.patch");
+    assert!(
+        result.errors.is_empty(),
+        "insert fixture must parse with no diagnostics, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn mtg_inserts_fixture_bus_legs_stay_ordered_and_ungrouped() {
+    let result = parse_mtg_fixture("11-inserts.patch");
+    let inst = result
+        .program
+        .statements
+        .iter()
+        .find_map(|s| match s {
+            Statement::Instance(i) if i.name == "FOH_Console" => Some(i),
+            _ => None,
+        })
+        .expect("FOH_Console instance");
+
+    let bus = |name: &str| {
+        inst.buses.iter().find(|b| b.name == name).unwrap_or_else(|| panic!("bus {name}"))
+    };
+    let legs = |refs: &[patchlang::ast::PortRef]| -> Vec<String> {
+        refs.iter()
+            .map(|p| {
+                let ch = p
+                    .index
+                    .as_ref()
+                    .and_then(|i| i.elements.first())
+                    .map(|e| format!("{e:?}"))
+                    .unwrap_or_default();
+                format!("{}:{}", p.port, ch)
+            })
+            .collect()
+    };
+
+    // Stereo: exactly two legs each way, in source order.
+    let main = bus("Main_LR");
+    assert_eq!(main.insert_send.len(), 2);
+    assert_eq!(main.insert_send[0].port, "Ext_Out");
+    assert_eq!(main.insert_return.len(), 2);
+
+    // Scattered: ports repeat across legs and must NOT be collapsed into a range.
+    let drums = bus("Drum_Sub");
+    assert_eq!(drums.insert_send.len(), 2, "send legs 3 and 10 must stay separate");
+    assert_eq!(drums.insert_return.len(), 2);
+
+    // Interleaved: a flat ordered list, NOT grouped by port the way bus inputs are.
+    let inter = bus("Interleaved");
+    assert_eq!(
+        legs(&inter.insert_send)
+            .iter()
+            .map(|s| s.split(':').next().unwrap().to_string())
+            .collect::<Vec<_>>(),
+        vec!["Ext_Out", "MADI_Out", "Ext_Out"],
+        "grouping by port would reorder this to Ext_Out, Ext_Out, MADI_Out"
+    );
+
+    // A bus with no inserts is unaffected.
+    assert_eq!(bus("Vocal_Group").insert_send.len(), 1);
+}
+
+#[test]
+fn mtg_inserts_fixture_round_trips_through_the_formatter() {
+    use patchlang::formatter::format_program;
+
+    let source = std::fs::read_to_string(format!("{MTG_FIXTURES_DIR}/11-inserts.patch"))
+        .expect("read fixture");
+    let first = format_program(&patchlang::parse(&source).program);
+    let second = format_program(&patchlang::parse(&first).program);
+    assert_eq!(first, second, "formatting the insert fixture must be idempotent");
+    assert!(first.contains("insert_send: MADI_Out[3], MADI_Out[10]"), "got:\n{first}");
+    assert!(first.contains("insert_send: \"MADI_Out[3], MADI_Out[10]\""), "got:\n{first}");
+}

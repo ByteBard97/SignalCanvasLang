@@ -173,6 +173,7 @@ fn emit_channel_labels_appear_in_config_block() {
                 source_type: None,
                 capsule: None,
                 rf_band: None,
+                ..Default::default()
             },
             ChannelLabelEmitInput {
                 channel_index: 2,
@@ -182,6 +183,7 @@ fn emit_channel_labels_appear_in_config_block() {
                 source_type: None,
                 capsule: None,
                 rf_band: None,
+                ..Default::default()
             },
         ],
     );
@@ -268,6 +270,7 @@ fn emit_channel_label_on_card_slot_port() {
             source_type: None,
             capsule: None,
             rf_band: None,
+            ..Default::default()
         }],
     );
     inst.channel_labels = labels;

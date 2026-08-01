@@ -360,6 +360,8 @@ fn convert_bus_entry(b: &ast::BusEntry) -> TsBusDecl {
             label: o.label.clone(),
             destinations: o.destinations.iter().map(convert_port_ref).collect(),
         }).collect(),
+        insert_send: b.insert_send.iter().map(convert_port_ref).collect(),
+        insert_return: b.insert_return.iter().map(convert_port_ref).collect(),
     }
 }
 

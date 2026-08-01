@@ -701,3 +701,47 @@ Contributors to `@stock` grant their contribution under ODbL. A plain-language C
 **Affects:** Library repo, `project-structure.md` (library tiers section), future CONTRIBUTING.md.
 
 **Related issues:** ByteBard97/SignalCanvasLang#26
+
+---
+
+### D023 — Insert Send/Return Representation and Endpoint Resolution
+**2026-08-01** | **Decided**
+
+**Question:** How should channel and bus inserts be represented in PatchLang, and how should an insert endpoint's port be resolved on the emit side?
+
+**Decision:** Inserts become first-class `.patch` data with **two different syntaxes**, and endpoints resolve **in Rust** via the existing `resolve_route_endpoint` path.
+
+**Why an insert belongs in `.patch` at all:** an insert breaks a channel or bus out to an external processor and back. The signal physically leaves the console, so the send/return endpoints are real signal flow — not presentation. They were sidecar-only because the canvas DTO could not round-trip them, not because they belonged there.
+
+**Why two syntaxes.** The asymmetry is forced by what each carrier can hold, not by preference:
+
+| Carrier | Syntax | Reason |
+|---------|--------|--------|
+| Channel label | `insert_send: "Ext_Out[3], Ext_Out[10]"` (quoted string) | A label property value holds at most one `KvValue::PortRef`; a leg list is inherently multi-valued. Extending kv parsing to comma-lists would change property syntax globally. |
+| Bus | `insert_send: Ext_Out[3], Ext_Out[10]` (native grammar) | `BusEntry` has no property block at all, so there is nothing to encode into. |
+
+A grammar-native `insert Mic_In[1] send: ... return: ...` statement was considered and rejected: the property-bag route is the ticket's own proposal and is far cheaper.
+
+**Leg semantics.** Each list is **ordered** — `[L]` mono, `[L, R]` stereo; reversing it swaps the stereo image. Legs are **independent**: no adjacency and no equal-width constraint, so a send on MADI 3 and 10 returning on 4 and 8 is valid, and the two lists may differ in length. Unlike bus `input:` entries — which are set-like and therefore grouped by `(instance, port)` and channel-unioned — insert legs are never grouped, unioned, or deduplicated, and a port may legitimately repeat. A range index in a leg is rejected rather than expanded; expanding `[1..2]` would silently double the insert's width. An insert is a **detour, not a destination**: legs never appear among the bus's inputs or outputs.
+
+**Endpoint resolution — the substantive fork.** The frontend sends `{ interfaceId, channel }`; PatchLang needs a template port name. Two conventions already existed in `canvas_emit/`: channel labels and instance routes resolve in Rust via `find_interface(..).map(directional_port_name).unwrap_or_else(sanitize_id)` (`routes.rs:87-89`), while bus inputs/outputs assumed TypeScript pre-resolved and only sanitized.
+
+Inserts follow the **Rust-side resolution** convention. The deciding fact is `should_split_io`: one io/asymmetric interface expands into **two** template ports (`{base}_In` / `{base}_Out`) for every non-ring/bus protocol, MADI included. The canonical insert case sends and returns on the *same* interface, so the legs must emit as `MADI_Out[3]` and `MADI_In[4]`. Only the side distinguishes them, and the side is known solely from which list the leg sits in — the emitter has it, TypeScript does not. Sanitizing alone emits a bare `MADI[3]` that the template never declares, which the loader then rejects and silently drops.
+
+Two further reasons: this reduces the number of conventions from two to one rather than adding a third, and it keeps the io-splitting rule in one place instead of requiring a third copy of `is_ring_bus_protocol` in TypeScript (DRY, rule 4).
+
+The `unwrap_or_else(sanitize_id)` fallback is load-bearing and retained: already-resolved port names and slot-qualified `__` compounds match no interface and must pass through untouched. Instance-qualified legs resolve against the named instance's own interfaces, matching route behaviour.
+
+**Lossy-boundary fixes shipped alongside:**
+- `ChannelLabelOutput` gained a verbatim `properties` bag. Any label key without a dedicated field was silently dropped on load — the reason `stand`/`gain` also needed the sidecar. A key is carried by the typed field **or** the bag, never both: a clean insert parse claims the key, a malformed one leaves the raw string in the bag so re-emit stays byte-faithful. This deliberately differs from `ConnectionLoadOutput::properties` (D-adjacent, v0.3.1), which keeps duplicates — connect's dedicated fields are a lossless re-read, whereas the insert typed field is a lossy parse.
+- `kv_map` returned `None` for `KvValue::PortRef`, so an unquoted `insert_send: Ext_Out[3]` parsed cleanly and then vanished at the DTO boundary. Now stringified, matching `graph::kv_to_string_map`. Affected all label properties, not just inserts.
+
+**No DRC.** A "send count ≠ return count" rule would contradict the stated independence of legs.
+
+**Compatibility.** On v0.3.1 and earlier, an `insert_send:` line inside `bus { }` hits `parse_bus_entry`'s catch-all `_ => { self.advance(); continue; }` and is silently skipped — no error, data lost. Tools emitting this syntax must require v0.3.2+. All new deserialized fields are `#[serde(default)]`; `patchlang-wasm`'s `add_bus`/`update_bus` deserialize `ast::BusEntry` directly from frontend JSON, where a missing field would otherwise reject the entire payload.
+
+**Known follow-up:** `patchlang-python`'s `set_label` hard-codes `HashMap::new()`, so the Python binding forwards no label properties at all. Out of scope here; filed separately.
+
+**Affects:** `SPEC.md` (§3.10 config), `docs/language-reference.md` (bus entry), `builder/insert_endpoints.rs`, `builder/canvas_{input,output,load}.rs`, `canvas_emit/{mod,routes}.rs`, `ast.rs`, `body_parser.rs`, `formatter_emit.rs`, `compat{,_types}.rs`.
+
+**Related issues:** ByteBard97/SignalCanvasLang#31

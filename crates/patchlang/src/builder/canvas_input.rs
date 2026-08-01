@@ -1,6 +1,7 @@
 //! Input types for the canvas → PatchLang emit direction.
 //! TypeScript assembles this JSON bundle; Rust does all language work.
 
+use super::insert_endpoints::InsertEndpoint;
 use serde::Deserialize;
 use std::collections::HashMap;
 use ts_rs::TS;
@@ -86,7 +87,7 @@ pub struct InstalledCardEmitInput {
     pub card_template_name: String,
 }
 
-#[derive(Debug, Clone, Deserialize, TS)]
+#[derive(Debug, Clone, Default, Deserialize, TS)]
 #[ts(export)]
 pub struct ChannelLabelEmitInput {
     pub channel_index: u32,
@@ -96,6 +97,19 @@ pub struct ChannelLabelEmitInput {
     pub source_type: Option<String>,
     pub capsule: Option<String>,
     pub rf_band: Option<String>,
+    /// Channel insert legs — ordered, `[L]` mono, `[L, R]` stereo (issue #31).
+    ///
+    /// `#[serde(default)]` is REQUIRED, same reason as `RouteRuleEmitInput::from_start`
+    /// above: a frontend built against older WASM omits these entirely, and without the
+    /// default serde rejects the whole payload with "missing field `insert_send`".
+    #[serde(default)]
+    pub insert_send: Vec<InsertEndpoint>,
+    #[serde(default)]
+    pub insert_return: Vec<InsertEndpoint>,
+    /// Label properties with no dedicated field above, emitted verbatim. Round-trips
+    /// with `ChannelLabelOutput::properties` — see that field for the ownership rule.
+    #[serde(default)]
+    pub properties: std::collections::BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Deserialize, TS)]
@@ -140,7 +154,7 @@ pub struct BusInputGroupEmitInput {
     pub channels: Vec<u32>,
 }
 
-#[derive(Debug, Clone, Deserialize, TS)]
+#[derive(Debug, Clone, Default, Deserialize, TS)]
 #[ts(export)]
 pub struct BusEmitInput {
     pub label: String,
@@ -156,6 +170,13 @@ pub struct BusEmitInput {
     pub output_channels: Vec<u32>,
     /// Named outputs (e.g. [{name: "Main Output", interface: "Matrix_Out", channels: [1, 2]}])
     pub named_outputs: Vec<BusOutputEmitInput>,
+    /// Bus insert legs — ordered, `[L]` mono, `[L, R]` stereo (issue #31).
+    /// `#[serde(default)]` required for backward compatibility, see
+    /// `ChannelLabelEmitInput::insert_send`.
+    #[serde(default)]
+    pub insert_send: Vec<InsertEndpoint>,
+    #[serde(default)]
+    pub insert_return: Vec<InsertEndpoint>,
 }
 
 #[derive(Debug, Clone, Deserialize, TS)]

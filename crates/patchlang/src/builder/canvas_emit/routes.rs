@@ -2,6 +2,7 @@ use crate::ast::{
     BusEntry, BusOutput, IndexElement, IndexSpec, PortRef, RouteEntry,
 };
 use crate::builder::canvas_input::*;
+use crate::builder::insert_endpoints::InsertEndpoint;
 use super::ports::*;
 use super::helpers::*;
 
@@ -102,9 +103,82 @@ pub(super) fn is_rf_sentinel(interface_id: &str) -> bool {
     interface_id.starts_with("__") && interface_id.ends_with("__")
 }
 
+/// Convert insert endpoint DTOs to `PortRef`s — one per leg, in order (#31).
+///
+/// No grouping, no channel union, no dedup: `[L, R]` order is significant and a port
+/// legitimately repeats across legs (`send: MADI[3], MADI[10]`).
+///
+/// Resolution goes through `resolve_route_endpoint`, the same path instance routes and
+/// channel labels use, rather than a bare `sanitize_id`. That matters because
+/// `should_split_io` (ports.rs) expands ONE frontend interface into TWO template ports
+/// (`{base}_In` / `{base}_Out`) for any io/asymmetric interface that is not a ring/bus
+/// protocol — MADI among them. The canonical insert case sends and returns on the SAME
+/// interface, so the legs must emit as `MADI_Out[3]` and `MADI_In[4]`; only the side
+/// parameter distinguishes them, and only Rust has it. Sanitizing alone would emit a
+/// bare `MADI[3]` that the template never declares.
+///
+/// `side` is fixed by which list this is: a send leaves the device (Output), a return
+/// comes back into it (Input).
+///
+/// The `unwrap_or_else(sanitize_id)` fallback inside `resolve_route_endpoint` is load-
+/// bearing here: it lets already-resolved port names and slot-qualified `__` compounds
+/// pass through untouched instead of being mangled.
+#[allow(clippy::too_many_arguments)]
+fn insert_legs_to_port_refs(
+    legs: &[InsertEndpoint],
+    side: PortSide,
+    ifaces: &[InterfaceEmitInput],
+    installed_cards: &[InstalledCardEmitInput],
+    manufacturer_cards: &[CardEmitInput],
+    all_instances: &[InstanceEmitInput],
+) -> Vec<PortRef> {
+    legs.iter()
+        .map(|leg| {
+            resolve_route_endpoint(
+                &leg.port,
+                leg.channel,
+                leg.instance.as_deref(),
+                ifaces,
+                installed_cards,
+                manufacturer_cards,
+                all_instances,
+                side,
+            )
+        })
+        .collect()
+}
+
+/// Resolve insert legs for a channel label into the canonical string property form.
+///
+/// Labels carry their legs as a quoted string because a label property value holds at
+/// most one port ref; buses get native grammar. Both go through the same resolution —
+/// see [`insert_legs_to_port_refs`] for why sanitizing alone is not enough.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn format_resolved_insert_legs(
+    legs: &[InsertEndpoint],
+    side: PortSide,
+    ifaces: &[InterfaceEmitInput],
+    installed_cards: &[InstalledCardEmitInput],
+    manufacturer_cards: &[CardEmitInput],
+    all_instances: &[InstanceEmitInput],
+) -> String {
+    let refs = insert_legs_to_port_refs(
+        legs,
+        side,
+        ifaces,
+        installed_cards,
+        manufacturer_cards,
+        all_instances,
+    );
+    crate::builder::insert_endpoints::format_port_ref_list(&refs)
+}
+
 pub(super) fn build_instance_buses(
     buses: &[BusEmitInput],
     ifaces: &[InterfaceEmitInput],
+    installed_cards: &[InstalledCardEmitInput],
+    manufacturer_cards: &[CardEmitInput],
+    all_instances: &[InstanceEmitInput],
 ) -> Vec<BusEntry> {
     buses
         .iter()
@@ -200,7 +274,6 @@ pub(super) fn build_instance_buses(
                     .collect()
             };
 
-            let _ = ifaces; // used for future label resolution
             BusEntry {
                 name: bus_name,
                 label: bus
@@ -210,6 +283,24 @@ pub(super) fn build_instance_buses(
                     .cloned(),
                 inputs,
                 outputs,
+                // One PortRef per leg, in order (#31). No grouping, no channel union,
+                // no dedup — unlike the inputs above, which are set-like.
+                insert_send: insert_legs_to_port_refs(
+                    &bus.insert_send,
+                    PortSide::Output,
+                    ifaces,
+                    installed_cards,
+                    manufacturer_cards,
+                    all_instances,
+                ),
+                insert_return: insert_legs_to_port_refs(
+                    &bus.insert_return,
+                    PortSide::Input,
+                    ifaces,
+                    installed_cards,
+                    manufacturer_cards,
+                    all_instances,
+                ),
                 span: builder_span(),
             }
         })

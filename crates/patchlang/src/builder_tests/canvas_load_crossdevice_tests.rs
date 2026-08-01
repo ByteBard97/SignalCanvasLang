@@ -233,6 +233,7 @@ fn bus_cross_device_output_roundtrip() {
             interface: "DX_2_Out".into(),
             channels: vec![1],
         }],
+    ..Default::default()
     }];
 
     let gx_inst = make_inst(
@@ -290,6 +291,7 @@ fn bus_cross_device_output_multi_channel_roundtrip() {
             interface: "DX_2_Out".into(),
             channels: vec![1, 2],
         }],
+    ..Default::default()
     }];
 
     let gx_inst = make_inst(

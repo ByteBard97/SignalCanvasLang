@@ -8,10 +8,11 @@
 use std::collections::HashMap;
 
 use crate::ast::{
-    IndexElement, KvValue, NetworkMember, PortDirection, Statement,
+    IndexElement, KvValue, NetworkMember, PortDirection, PortRef, Statement,
 };
 use crate::builder::canvas_output::*;
 use crate::builder::error::BuilderError;
+use crate::builder::insert_endpoints::{parse_insert_list, InsertEndpoint};
 use crate::parser::parse;
 
 /// Parse PatchLang source text and return a canvas-ready bundle.
@@ -131,6 +132,11 @@ pub fn load_from_patch(patch_source: &str, _layout_json: &str) -> Result<CanvasL
             let port_name = cl.port.port.clone();
             let channel_index = extract_single_index(&cl.port.index).unwrap_or(1);
             let props = kv_map(&cl.properties);
+            // Insert legs (#31). All-or-nothing: a clean parse takes ownership of the
+            // key and removes it from the leftovers bag; a malformed one leaves the
+            // typed field empty and the raw string in the bag, so it re-emits intact.
+            let insert_send = parse_insert_list_prop(&props, "insert_send");
+            let insert_return = parse_insert_list_prop(&props, "insert_return");
             let label_entry = ChannelLabelOutput {
                 channel_index,
                 label: cl.label.clone(),
@@ -139,20 +145,15 @@ pub fn load_from_patch(patch_source: &str, _layout_json: &str) -> Result<CanvasL
                 source_type: props.get("source_type").cloned(),
                 capsule: props.get("capsule").cloned(),
                 rf_band: props.get("rf_band").cloned(),
+                properties: leftover_label_props(&props, &insert_send, &insert_return),
+                insert_send,
+                insert_return,
             };
             let channel_vec = inst_labels.entry(port_name).or_default();
             // Extend vec to fit the channel_index (1-based → 0-based)
             let idx = (channel_index as usize).saturating_sub(1);
             if channel_vec.len() <= idx {
-                channel_vec.resize_with(idx + 1, || ChannelLabelOutput {
-                    channel_index: 0,
-                    label: String::new(),
-                    phantom: false,
-                    propagated: false,
-                    source_type: None,
-                    capsule: None,
-                    rf_band: None,
-                });
+                channel_vec.resize_with(idx + 1, ChannelLabelOutput::default);
             }
             channel_vec[idx] = label_entry;
         }
@@ -392,6 +393,13 @@ pub fn load_from_patch(patch_source: &str, _layout_json: &str) -> Result<CanvasL
                 Some(outputs)
             }).flatten().collect();
 
+            // Insert legs (#31). Deliberately NOT run through the grouping/union above
+            // and NOT filtered by `is_valid_port`: order is significant, a port
+            // legitimately repeats across legs, and this ticket is about not losing
+            // data — a sentinel-looking port is preserved and left for DRC to flag.
+            let insert_send = bus_insert_endpoints(&bus.insert_send);
+            let insert_return = bus_insert_endpoints(&bus.insert_return);
+
             BusOutput {
                 name: bus.name.clone(),
                 display_name,
@@ -399,6 +407,8 @@ pub fn load_from_patch(patch_source: &str, _layout_json: &str) -> Result<CanvasL
                 input_channels,
                 input_groups,
                 named_outputs,
+                insert_send,
+                insert_return,
             }
         }).collect();
 
@@ -513,15 +523,94 @@ fn meta_num(tmpl: &crate::ast::TemplateDecl, key: &str) -> Option<u32> {
 }
 
 fn kv_map(kvs: &[crate::ast::KeyValue]) -> HashMap<String, String> {
-    kvs.iter().filter_map(|kv| {
-        if let KvValue::Str { value } = &kv.value {
-            Some((kv.key.clone(), value.clone()))
-        } else if let KvValue::Num { value } = &kv.value {
-            Some((kv.key.clone(), value.to_string()))
-        } else {
-            None
+    kvs.iter().map(|kv| {
+        match &kv.value {
+            KvValue::Str { value } => (kv.key.clone(), value.clone()),
+            KvValue::Num { value } => (kv.key.clone(), value.to_string()),
+            // Previously `None` — every port-ref-valued property was silently dropped
+            // on load. `parse_key_value_full` accepts a bare identifier as a PortRef,
+            // so `insert_send: Ext_Out[3]` (unquoted — right-looking, and what an LLM
+            // writes by default) parsed fine and then vanished here. Stringify instead,
+            // matching what `graph::kv_to_string_map` already does. Issue #31.
+            KvValue::PortRef(pr) => (kv.key.clone(), port_ref_to_string(pr)),
         }
     }).collect()
+}
+
+/// Convert parsed bus insert `PortRef`s to endpoint DTOs, one entry per leg.
+///
+/// A leg whose index is absent or is a range/multi-element spec is skipped rather than
+/// expanded — expanding `[1..2]` into two endpoints would silently double an insert's
+/// width. See `builder::insert_endpoints` for the same rule on the label side.
+fn bus_insert_endpoints(refs: &[PortRef]) -> Vec<InsertEndpoint> {
+    refs.iter()
+        .filter_map(|pr| {
+            let channels = expand_index(&pr.index);
+            let [channel] = channels.as_slice() else { return None };
+            Some(InsertEndpoint {
+                instance: pr.instance.clone(),
+                port: pr.port.clone(),
+                channel: *channel,
+            })
+        })
+        .collect()
+}
+
+/// Render a `PortRef` back to its source form: `Port[3]` or `Instance.Port[3]`.
+fn port_ref_to_string(pr: &PortRef) -> String {
+    let mut out = String::new();
+    if let Some(inst) = &pr.instance {
+        out.push_str(inst);
+        out.push('.');
+    }
+    out.push_str(&pr.port);
+    if let Some(index) = &pr.index {
+        let channels = expand_index(&Some(index.clone()));
+        if let [single] = channels.as_slice() {
+            out.push_str(&format!("[{single}]"));
+        }
+    }
+    out
+}
+
+/// Decode an insert leg list from a label property, per issue #31.
+///
+/// Empty when the key is absent OR when the value is malformed — in the malformed case
+/// [`leftover_label_props`] keeps the raw string so nothing is lost.
+fn parse_insert_list_prop(
+    props: &HashMap<String, String>,
+    key: &str,
+) -> Vec<InsertEndpoint> {
+    props
+        .get(key)
+        .and_then(|raw| parse_insert_list(raw))
+        .unwrap_or_default()
+}
+
+/// Every label property with no dedicated field on `ChannelLabelOutput`.
+///
+/// An insert key is removed only when its typed field actually took ownership of the
+/// value (i.e. it parsed cleanly). A malformed insert string stays, so re-emit is
+/// byte-faithful rather than blanked. See `ChannelLabelOutput::properties`.
+fn leftover_label_props(
+    props: &HashMap<String, String>,
+    insert_send: &[InsertEndpoint],
+    insert_return: &[InsertEndpoint],
+) -> std::collections::BTreeMap<String, String> {
+    const DEDICATED: [&str; 5] =
+        ["phantom", "propagated", "source_type", "capsule", "rf_band"];
+    let claimed_by_typed_field = |key: &str| match key {
+        // An insert key is claimed only when its typed field actually parsed. When the
+        // parse failed the raw string must stay here or the value is lost on re-emit.
+        "insert_send" => !insert_send.is_empty(),
+        "insert_return" => !insert_return.is_empty(),
+        other => DEDICATED.contains(&other),
+    };
+    props
+        .iter()
+        .filter(|(k, _)| !claimed_by_typed_field(k))
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect()
 }
 
 
