@@ -1,7 +1,7 @@
 ---
 name: patchlang
 description: >
-  PatchLang v0.2.8 language reference for writing, editing, and migrating .patch files.
+  PatchLang v0.3.2 language reference for writing, editing, and migrating .patch files.
   Use this skill whenever you are writing or editing a .patch file, converting a hardware
   datasheet into PatchLang, updating legacy PatchLang syntax to the current version, or
   generating templates/instances/connections for SignalCanvas. Also use it when the user
@@ -9,9 +9,9 @@ description: >
   they don't say "PatchLang" explicitly.
 ---
 
-# PatchLang v0.2.8
+# PatchLang v0.3.2
 
-You are writing **PatchLang v0.2.5**. The language describes broadcast/AV signal flow:
+You are writing **PatchLang v0.3.2**. The language describes broadcast/AV signal flow:
 templates define device types, instances are physical devices, and connections are cables.
 
 When you need annotated examples (Dante systems, ring networks, slot/cards, composition),
@@ -211,6 +211,8 @@ instance DeviceName is TemplateName {
   bus Main_LR {
     label: "SPOTIFY>FOH"        # optional display name — use when bus name is not human-readable
     input: Fader[1..8]
+    insert_send: Ext_Out[3], Ext_Out[10]     # optional — external processor send
+    insert_return: Ext_In[4], Ext_In[8]      # optional — and its return
     output: Matrix_Out[1..2]
   }
 }
@@ -308,8 +310,38 @@ flag Genlock_OK {
 config InstanceName {
   label Port_In[1]: "Channel Label" { phantom: "true" }
   label Port_In[2]: "Kick Drum"
+  label Port_In[3]: "Lead Vocal" {
+    insert_send: "Ext_Out[3], Ext_Out[10]"   # channel insert — QUOTED string
+    insert_return: "Ext_In[4], Ext_In[8]"
+  }
 }
 ```
+
+### Inserts (v0.3.2+)
+
+An insert breaks a channel or bus out to an external processor and back. Because the
+signal physically leaves the device it belongs in `.patch`, not the layout sidecar.
+
+Two syntaxes, because of what each carrier can hold — this is not a style choice:
+
+| Carrier | Syntax | Why |
+|---------|--------|-----|
+| Channel label | `insert_send: "Ext_Out[3], Ext_Out[10]"` — **quoted string** | a label property value holds only one port ref |
+| Bus | `insert_send: Ext_Out[3], Ext_Out[10]` — **bare, no quotes** | a bus has no property block |
+
+Rules for both:
+
+- **Ordered.** One leg for mono, two for stereo (`[L, R]`). Reversing the list swaps
+  the stereo image, so never sort or reorder them.
+- **Independent legs.** No adjacency and no equal-width constraint — a send on 3 and 10
+  returning on 4 and 8 is correct and common, and a send list may be a different length
+  than its return list. Do not "tidy" scattered legs into a range.
+- **One channel per leg.** Write `Ext_Out[1], Ext_Out[2]`, never `Ext_Out[1..2]`. On a
+  bus a range is a parse error; on a label it silently fails to parse as an insert.
+- **A detour, not a destination.** Insert legs are not bus inputs or outputs. Do not
+  also add them to `input:` / `output`.
+- **Quote the label form.** Unquoted on a label parses as a single port ref and can
+  carry only one leg.
 
 ### Multi-file import
 
