@@ -255,6 +255,33 @@ impl<'a> Parser<'a> {
         }
         for leg in insert_send.iter().chain(insert_return.iter()) {
             reject_auto_in_index(&leg.index, &span, &mut self.errors, "bus");
+            // Every insert leg must name exactly one channel (#31). Rejecting here,
+            // loudly, is deliberate: the canvas DTO carries one entry per leg, so a
+            // leg with no index or a range index would otherwise have to be dropped or
+            // expanded at that boundary — silently changing how many channels the
+            // insert claims. That silent-drop-at-the-DTO is the whole bug this feature
+            // exists to fix; reintroducing it on the bus path would be perverse.
+            //
+            // The label path cannot do this check because its legs are an opaque
+            // string, not grammar; there a malformed value is preserved verbatim in
+            // the property bag instead. See ChannelLabelOutput::properties.
+            let single_channel = leg
+                .index
+                .as_ref()
+                .is_some_and(|i| matches!(i.elements.as_slice(), [IndexElement::Single { .. }]));
+            if !single_channel {
+                self.errors.push(ParseError {
+                    message: format!(
+                        "insert leg '{}' must name exactly one channel",
+                        leg.port
+                    ),
+                    span: span.clone(),
+                    hint: Some(
+                        "Write each leg separately: insert_send: Ext_Out[1], Ext_Out[2]"
+                            .to_string(),
+                    ),
+                });
+            }
         }
         BusEntry { name, label, inputs, outputs, insert_send, insert_return, span }
     }

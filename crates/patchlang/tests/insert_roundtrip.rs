@@ -308,3 +308,87 @@ fn legacy_emit_input_json_without_insert_fields_still_deserializes() {
     .expect("legacy bus payload must still deserialize");
     assert!(bus.insert_send.is_empty() && bus.insert_return.is_empty());
 }
+
+// ---------------------------------------------------------------------------
+// Bus legs must name exactly one channel — rejected loudly, never dropped quietly
+// ---------------------------------------------------------------------------
+
+#[test]
+fn bus_insert_leg_with_a_range_index_is_a_parse_error() {
+    // The DTO carries one entry per leg. A range would have to be expanded (doubling
+    // the claimed width) or dropped (losing it) at that boundary — so it is refused
+    // here instead, where the user can see it.
+    let result = patchlang::parse(&bus_patch("    insert_send: Ext_Out[1..2]"));
+    assert!(
+        result.errors.iter().any(|e| e.message.contains("exactly one channel")),
+        "expected a single-channel diagnostic, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn bus_insert_leg_without_an_index_is_a_parse_error() {
+    let result = patchlang::parse(&bus_patch("    insert_send: Ext_Out"));
+    assert!(
+        result.errors.iter().any(|e| e.message.contains("exactly one channel")),
+        "a leg with no channel must not be silently dropped, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn valid_bus_insert_legs_produce_no_diagnostics() {
+    let result = patchlang::parse(&bus_patch(
+        "    insert_send: Ext_Out[3], Ext_Out[10]\n    insert_return: Ext_In[4]",
+    ));
+    assert!(result.errors.is_empty(), "unexpected diagnostics: {:?}", result.errors);
+}
+
+// ---------------------------------------------------------------------------
+// The seam that actually retires the sidecar: load → re-emit
+// ---------------------------------------------------------------------------
+
+/// Loading `.patch` text and emitting it again must preserve both the insert legs and
+/// the unknown properties riding the verbatim bag.
+///
+/// This is the cycle that matters in production — the earlier emit tests start from a
+/// hand-built `ChannelLabelEmitInput`, which cannot catch a loss on the load side.
+#[test]
+fn label_inserts_and_unknown_properties_survive_load_then_reemit() {
+    use patchlang::builder::canvas_input::ChannelLabelEmitInput;
+    use patchlang::builder::insert_endpoints::format_insert_list;
+
+    let src = label_patch(
+        "    stand: \"tall boom\"\n    gain: \"+12\"\n    insert_send: \"Ext_Out[3], Ext_Out[10]\"",
+    );
+    let out = load_from_patch(&src, "").expect("load");
+    let inst = out.instances.iter().find(|i| i.name == "FOH").unwrap();
+    let loaded = &inst.channel_labels.get("Mic_In").unwrap()[0];
+
+    // Rebuild the emit input from exactly what the load handed back — the conversion
+    // the frontend performs. Every field must survive the hand-off.
+    let round_tripped = ChannelLabelEmitInput {
+        channel_index: loaded.channel_index,
+        label: loaded.label.clone(),
+        phantom: loaded.phantom,
+        propagated: loaded.propagated,
+        source_type: loaded.source_type.clone(),
+        capsule: loaded.capsule.clone(),
+        rf_band: loaded.rf_band.clone(),
+        insert_send: loaded.insert_send.clone(),
+        insert_return: loaded.insert_return.clone(),
+        properties: loaded.properties.clone(),
+    };
+
+    assert_eq!(
+        format_insert_list(&round_tripped.insert_send),
+        "Ext_Out[3], Ext_Out[10]",
+        "insert legs must survive the load → emit-input hand-off"
+    );
+    assert_eq!(round_tripped.properties.get("stand").map(String::as_str), Some("tall boom"));
+    assert_eq!(round_tripped.properties.get("gain").map(String::as_str), Some("+12"));
+    assert!(
+        !round_tripped.properties.contains_key("insert_send"),
+        "insert_send is owned by the typed field; duplicating it would double-emit"
+    );
+}

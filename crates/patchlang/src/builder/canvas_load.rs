@@ -537,21 +537,23 @@ fn kv_map(kvs: &[crate::ast::KeyValue]) -> HashMap<String, String> {
     }).collect()
 }
 
-/// Convert parsed bus insert `PortRef`s to endpoint DTOs, one entry per leg.
+/// Convert parsed bus insert `PortRef`s to endpoint DTOs — exactly one entry per leg.
 ///
-/// A leg whose index is absent or is a range/multi-element spec is skipped rather than
-/// expanded — expanding `[1..2]` into two endpoints would silently double an insert's
-/// width. See `builder::insert_endpoints` for the same rule on the label side.
+/// The leg count is preserved unconditionally. `parse_bus_entry` already rejects any
+/// leg that does not name exactly one channel, so a non-single index cannot reach here
+/// through `load_from_patch` (parse errors abort the load). The channel-1 fallback
+/// covers only ASTs built programmatically via the builder API, and mirrors what the
+/// bus-input grouping does for an empty index.
+///
+/// Dropping a leg here would be the wrong failure mode whatever the cause: it silently
+/// changes how many channels the insert claims — mono where the file said stereo — and
+/// silent loss at this boundary is precisely the bug this feature exists to fix.
 fn bus_insert_endpoints(refs: &[PortRef]) -> Vec<InsertEndpoint> {
     refs.iter()
-        .filter_map(|pr| {
-            let channels = expand_index(&pr.index);
-            let [channel] = channels.as_slice() else { return None };
-            Some(InsertEndpoint {
-                instance: pr.instance.clone(),
-                port: pr.port.clone(),
-                channel: *channel,
-            })
+        .map(|pr| InsertEndpoint {
+            instance: pr.instance.clone(),
+            port: pr.port.clone(),
+            channel: expand_index(&pr.index).first().copied().unwrap_or(1),
         })
         .collect()
 }
