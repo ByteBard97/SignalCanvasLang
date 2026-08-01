@@ -140,15 +140,29 @@ impl ProgramBuilder {
     }
 
     /// Set a channel label on an instance.
+    ///
+    /// `props` carries the label's properties — `phantom`, `source_type`, `capsule`,
+    /// `rf_band`, `insert_send`/`insert_return` (#31), or any custom key. It was
+    /// previously hard-coded to an empty map, so the Python binding could not set a
+    /// single property; the WASM binding has accepted them all along (#32).
+    ///
+    /// A native dict, not a JSON string. The WASM binding takes JSON only because it
+    /// crosses a boundary that has no dict type; Python has one.
+    ///
+    /// `Option` is required because pyo3 0.22 cannot default a bare `HashMap` in the
+    /// signature string — it carries no meaning here, as `None` and `{}` both forward
+    /// an empty map.
+    #[pyo3(signature = (instance, port, index, label, props=None))]
     fn set_label(
         &mut self,
         instance: &str,
         port: &str,
         index: u32,
         label: &str,
+        props: Option<HashMap<String, String>>,
     ) -> PyResult<()> {
         self.inner
-            .set_label(instance, port, index, label, HashMap::new())
+            .set_label(instance, port, index, label, props.unwrap_or_default())
             .map_err(|e| PyValueError::new_err(e.to_string()))
     }
 }

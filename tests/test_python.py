@@ -44,4 +44,35 @@ assert types['Instance'] == 53, f"Expected 53 instances, got {types.get('Instanc
 assert types['Connect'] == 99, f"Expected 99 connects, got {types.get('Connect')}"
 print('PASS: hillsong-mtg.patch (1485 lines, 203 statements)')
 
+# Test: ProgramBuilder.set_label forwards label properties (#32)
+#
+# `set_label` hard-coded an empty properties map, so the Python binding could not set
+# `phantom`, `capsule`, the insert legs (#31), or any custom key — while the WASM
+# binding had accepted them all along. This is the first test to exercise the builder
+# class from Python at all.
+builder = patchlang_python.ProgramBuilder.from_source("""
+template Desk {
+  ports {
+    Mic_In[1..8]: in(XLR)
+    Ext_Out[1..16]: out(XLR)
+  }
+}
+instance FOH is Desk {}
+""")
+
+builder.set_label('FOH', 'Mic_In', 1, 'Kick', {
+    'phantom': 'true',
+    'insert_send': 'Ext_Out[3], Ext_Out[10]',
+})
+out = builder.format()
+assert 'phantom' in out, f"properties must reach the emitted patch, got:\n{out}"
+assert 'insert_send' in out, f"insert legs must reach the emitted patch, got:\n{out}"
+assert 'Ext_Out[3], Ext_Out[10]' in out, f"leg list must survive verbatim, got:\n{out}"
+
+# Back-compat: the no-props call must still work, since this is a published wheel.
+builder.set_label('FOH', 'Mic_In', 2, 'Snare')
+out2 = builder.format()
+assert 'Snare' in out2, f"omitting props must still set the label, got:\n{out2}"
+print('PASS: set_label forwards properties (#32)')
+
 print('\nAll Python tests passed!')
