@@ -7,4 +7,20 @@
  * on the SAME device. `instance` exists only so an instance-qualified reference
  * round-trips unchanged if one ever appears; nothing is built on it.
  */
-export type InsertEndpoint = { instance?: string, port: string, channel: number, };
+export type InsertEndpoint = { instance?: string, 
+/**
+ * On the **load** side this is always a resolved PatchLang port name.
+ *
+ * On the **emit** side it may equally be a raw canvas interface id — the emitter
+ * resolves it (send legs as an output, return legs as an input, so a split-io
+ * interface becomes `MADI_Out` / `MADI_In`) and passes anything it cannot match
+ * through unchanged. Callers should send the raw id and let Rust resolve.
+ *
+ * Hence the `interfaceId` alias: the frontend's own `InsertEndpoint` names this
+ * field `interfaceId`, and `port` has no serde default, so a payload passed
+ * through verbatim would otherwise fail with "missing field `port`" — rejecting
+ * the *entire* emit bundle and breaking every autosave, not just the insert.
+ * Accepting both spellings turns a confusing cliff into a no-op. Serialization is
+ * unaffected; output is always `port`.
+ */
+port: string, channel: number, };

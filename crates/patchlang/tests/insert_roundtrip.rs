@@ -392,3 +392,25 @@ fn label_inserts_and_unknown_properties_survive_load_then_reemit() {
         "insert_send is owned by the typed field; duplicating it would double-emit"
     );
 }
+
+/// The frontend's own `InsertEndpoint` names this field `interfaceId`, not `port`.
+///
+/// `port` has no serde default, so a payload passed through verbatim would fail with
+/// "missing field `port`" — and serde rejects the *whole* emit bundle on one bad field,
+/// so that breaks every autosave rather than just the insert. The alias makes both
+/// spellings work.
+#[test]
+fn emit_payload_accepts_the_frontends_interface_id_spelling() {
+    use patchlang::builder::canvas_input::ChannelLabelEmitInput;
+
+    let label: ChannelLabelEmitInput = serde_json::from_str(
+        r#"{"channel_index":1,"label":"Kick","phantom":false,"propagated":false,
+            "source_type":null,"capsule":null,"rf_band":null,
+            "insert_send":[{"interfaceId":"madi","channel":3}],
+            "insert_return":[{"port":"madi","channel":4}]}"#,
+    )
+    .expect("both spellings must deserialize");
+
+    assert_eq!(label.insert_send[0].port, "madi", "interfaceId must map onto port");
+    assert_eq!(label.insert_return[0].port, "madi", "port must still work");
+}
