@@ -293,7 +293,7 @@ pub fn load_from_patch(patch_source: &str, _layout_json: &str) -> Result<CanvasL
         };
 
         // Internal buses
-        let internal_buses: Vec<BusOutput> = inst.buses.iter().map(|bus| {
+        let internal_buses: Vec<BusLoadOutput> = inst.buses.iter().map(|bus| {
             let display_name = bus.label.clone().filter(|n| !n.is_empty());
 
             // Input: filter valid, then group by (instance, port) preserving first-seen order.
@@ -400,7 +400,7 @@ pub fn load_from_patch(patch_source: &str, _layout_json: &str) -> Result<CanvasL
             let insert_send = bus_insert_endpoints(&bus.insert_send);
             let insert_return = bus_insert_endpoints(&bus.insert_return);
 
-            BusOutput {
+            BusLoadOutput {
                 name: bus.name.clone(),
                 display_name,
                 input_port,

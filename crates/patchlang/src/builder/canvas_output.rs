@@ -42,7 +42,7 @@ pub struct InstanceLoadOutput {
     pub route_rules: Vec<RouteRuleOutput>,
     /// Per-instance route entries (`route A[n] -> B[m]` in instance body) → pd.internalRoutes
     pub instance_routes: Vec<RouteRuleOutput>,
-    pub internal_buses: Vec<BusOutput>,
+    pub internal_buses: Vec<BusLoadOutput>,
     pub tx_streams: Vec<StreamOutput>,
     pub rx_streams: Vec<StreamOutput>,
     pub is_ring_container: bool,
@@ -150,7 +150,7 @@ pub struct BusInputGroup {
 
 #[derive(Debug, Serialize, TS)]
 #[ts(export)]
-pub struct BusOutput {
+pub struct BusLoadOutput {
     pub name: String,
     pub display_name: Option<String>,
     /// Deprecated: use `input_groups` for multi-port bus inputs.
