@@ -152,6 +152,34 @@ mod flow {
             "non-AES67 16-channel should not warn: {:?}", diags);
     }
 
+    #[test]
+    fn f02_aes67_string_channels_emits_info() {
+        // canvas_emit writes `channels` via kv_str, so the property arrives as a
+        // string. F02 read only KvValue::Num and therefore never fired on any
+        // canvas-emitted file.
+        let diags = flow_diags(r#"
+            template Dev { ports { Out[1..16]: out(etherCON) [Dante] } }
+            instance D is Dev
+            stream BigStream { source: D.Out channels: "16" protocol: "AES67" }
+        "#);
+        assert!(diags.iter().any(|d| {
+            d.severity == Severity::Info
+                && d.message.contains("8 channels per flow")
+                && d.message.contains("16 channels")
+        }), "expected F02 info for string-valued 16-channel AES67: {:?}", diags);
+    }
+
+    #[test]
+    fn f02_aes67_unparseable_string_channels_is_ignored() {
+        let diags = flow_diags(r#"
+            template Dev { ports { Out[1..16]: out(etherCON) [Dante] } }
+            instance D is Dev
+            stream Odd { source: D.Out channels: "many" protocol: "AES67" }
+        "#);
+        assert!(!diags.iter().any(|d| d.message.contains("8 channels per flow")),
+            "unparseable channels should not trip F02: {:?}", diags);
+    }
+
     // --- F03: Multicast prefix mismatch ---
 
     #[test]

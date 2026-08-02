@@ -103,14 +103,7 @@ fn check_aes67_channel_limit(program: &PatchProgram, diags: &mut Vec<Diagnostic>
                 continue;
             }
 
-            let channels = stream.properties.iter().find_map(|kv| {
-                if kv.key == "channels" {
-                    if let KvValue::Num { value } = &kv.value {
-                        return Some(*value);
-                    }
-                }
-                None
-            });
+            let channels = declared_channels(&stream.properties);
 
             if let Some(ch) = channels {
                 if ch > 8 {
@@ -135,6 +128,24 @@ fn check_aes67_channel_limit(program: &PatchProgram, diags: &mut Vec<Diagnostic>
             }
         }
     }
+}
+
+/// Read a stream's declared `channels` property.
+///
+/// Accepts both `channels: 8` (hand-authored) and `channels: "8"` (canvas-emitted,
+/// which writes every stream property as a string). Reading only `Num` is what left
+/// F02 dead on every canvas-emitted file.
+fn declared_channels(properties: &[crate::ast::KeyValue]) -> Option<u32> {
+    properties.iter().find_map(|kv| {
+        if kv.key != "channels" {
+            return None;
+        }
+        match &kv.value {
+            KvValue::Num { value } => Some(*value),
+            KvValue::Str { value } => value.trim().parse::<u32>().ok(),
+            _ => None,
+        }
+    })
 }
 
 /// F03 — Multicast prefix mismatch between AES67 devices.
