@@ -180,6 +180,233 @@ mod flow {
             "unparseable channels should not trip F02: {:?}", diags);
     }
 
+    /// The test above cannot tell "ignored" from "read as 0" — `0 > 8` is false either
+    /// way, so it survives a `.or(Some(0))` on the parse. F04 is where the difference
+    /// actually bites: read as 0, an unparseable count against a real selection emits a
+    /// bogus "declares 0 channels but its source selects 2".
+    #[test]
+    fn f04_unparseable_channels_with_a_selection_does_not_warn() {
+        let diags = flow_diags(r#"
+            template Dev { ports { Out[1..16]: out(etherCON) [Dante] } }
+            instance D is Dev
+            stream Odd { source: D.Out[1, 3] channels: "many" protocol: "AES67" }
+        "#);
+        assert!(!diags.iter().any(|d| d.message.contains("declares")),
+            "an unparseable channels count must be ignored, never read as 0: {:?}", diags);
+    }
+
+    // --- F02: selection length wins over the declared channel count ---
+
+    #[test]
+    fn f02_counts_selection_length_not_declared_channels() {
+        // `channels` under-reports; the selection is 9 wide, so F02 must fire.
+        let diags = flow_diags(r#"
+            template Dev { ports { Out[1..16]: out(etherCON) [Dante] } }
+            instance D is Dev
+            stream Wide { source: D.Out[1..9] channels: 2 protocol: "AES67" }
+        "#);
+        assert!(diags.iter().any(|d| {
+            d.severity == Severity::Info
+                && d.message.contains("8 channels per flow")
+                && d.message.contains("9 channels")
+        }), "expected F02 to count the 9-channel selection: {:?}", diags);
+    }
+
+    #[test]
+    fn f02_selection_within_limit_silences_an_overstated_channels() {
+        // `channels` over-reports; the real selection is 4 wide, so F02 must not fire.
+        let diags = flow_diags(r#"
+            template Dev { ports { Out[1..16]: out(etherCON) [Dante] } }
+            instance D is Dev
+            stream Narrow { source: D.Out[7, 1, 5, 3] channels: 16 protocol: "AES67" }
+        "#);
+        assert!(!diags.iter().any(|d| d.message.contains("8 channels per flow")),
+            "a 4-channel selection should not trip the 8-channel limit: {:?}", diags);
+    }
+
+    // --- F04: channels disagrees with the selection length ---
+
+    #[test]
+    fn f04_num_channels_mismatch_warns() {
+        let diags = flow_diags(r#"
+            template Dev { ports { Out[1..16]: out(etherCON) [Dante] } }
+            instance D is Dev
+            stream S { source: D.Out[1, 3, 5, 7] channels: 2 protocol: "AES67" }
+        "#);
+        assert!(diags.iter().any(|d| {
+            d.severity == Severity::Warning
+                && d.message.contains("declares 2 channels")
+                && d.message.contains("selects 4")
+        }), "expected F04 warning for 2 vs 4: {:?}", diags);
+    }
+
+    #[test]
+    fn f04_str_channels_mismatch_warns() {
+        // canvas_emit writes `channels` as a string; F04 must read it from day one.
+        let diags = flow_diags(r#"
+            template Dev { ports { Out[1..16]: out(etherCON) [Dante] } }
+            instance D is Dev
+            stream S { source: D.Out[1, 3, 5, 7] channels: "2" protocol: "AES67" }
+        "#);
+        assert!(diags.iter().any(|d| {
+            d.severity == Severity::Warning
+                && d.message.contains("declares 2 channels")
+                && d.message.contains("selects 4")
+        }), "expected F04 warning for string-valued channels: {:?}", diags);
+    }
+
+    #[test]
+    fn f04_consistent_num_channels_no_warning() {
+        let diags = flow_diags(r#"
+            template Dev { ports { Out[1..16]: out(etherCON) [Dante] } }
+            instance D is Dev
+            stream S { source: D.Out[1, 3, 5, 7] channels: 4 protocol: "AES67" }
+        "#);
+        assert!(!diags.iter().any(|d| d.message.contains("selects")),
+            "matching counts should not warn: {:?}", diags);
+    }
+
+    #[test]
+    fn f04_consistent_str_channels_no_warning() {
+        let diags = flow_diags(r#"
+            template Dev { ports { Out[1..16]: out(etherCON) [Dante] } }
+            instance D is Dev
+            stream S { source: D.Out[1..4] channels: "4" protocol: "AES67" }
+        "#);
+        assert!(!diags.iter().any(|d| d.message.contains("selects")),
+            "matching counts written as a string should not warn: {:?}", diags);
+    }
+
+    #[test]
+    fn f04_no_selection_no_warning() {
+        // Every stream in every existing file looks like this: a channel count and
+        // no index. F04 must stay silent, or it would fire on the whole corpus.
+        let diags = flow_diags(r#"
+            template Dev { ports { Out[1..8]: out(etherCON) [Dante] } }
+            instance D is Dev
+            stream S { source: D.Out channels: "8" protocol: "AES67" }
+        "#);
+        assert!(diags.is_empty(), "a plain 8-channel stream should be clean: {:?}", diags);
+    }
+
+    // --- F05: a source channel repeated at more than one position ---
+
+    #[test]
+    fn f05_repeated_channel_is_info() {
+        let diags = flow_diags(r#"
+            template Dev { ports { Out[1..8]: out(etherCON) [Dante] } }
+            instance D is Dev
+            stream Dupe { source: D.Out[3, 1, 3] channels: 3 protocol: "AES67" }
+        "#);
+        let hits: Vec<_> = diags
+            .iter()
+            .filter(|d| d.message.contains("more than one position"))
+            .collect();
+        assert_eq!(hits.len(), 1, "expected exactly one F05 diagnostic: {:?}", diags);
+        assert_eq!(
+            hits[0].severity,
+            Severity::Info,
+            "F05 must be Info — position is significant, so a repeat can be deliberate \
+             replication rather than a fault: {:?}",
+            hits[0]
+        );
+        assert!(hits[0].message.contains("intended"),
+            "F05 should ask whether the repeat is intended, not assert a fault: {:?}", hits[0]);
+    }
+
+    #[test]
+    fn f05_non_monotonic_unique_selection_no_diagnostic() {
+        // Order is user intent and is preserved; only repeats are remarked on.
+        let diags = flow_diags(r#"
+            template Dev { ports { Out[1..8]: out(etherCON) [Dante] } }
+            instance D is Dev
+            stream Shuffled { source: D.Out[7, 1, 5, 3] channels: 4 protocol: "AES67" }
+        "#);
+        assert!(diags.is_empty(),
+            "a unique out-of-order selection is legal and should be clean: {:?}", diags);
+    }
+
+    #[test]
+    fn f05_reports_each_repeated_channel_once() {
+        let diags = flow_diags(r#"
+            template Dev { ports { Out[1..8]: out(etherCON) [Dante] } }
+            instance D is Dev
+            stream Dupe { source: D.Out[2, 2, 2] channels: 3 protocol: "AES67" }
+        "#);
+        let hits: Vec<_> = diags
+            .iter()
+            .filter(|d| d.message.contains("more than one position"))
+            .collect();
+        assert_eq!(hits.len(), 1,
+            "a channel repeated three times should be reported once: {:?}", diags);
+    }
+
+    // --- [auto] in a stream source ---
+
+    #[test]
+    fn auto_in_stream_source_is_info() {
+        let diags = flow_diags(r#"
+            template Dev { ports { Out[1..8]: out(etherCON) [Dante] } }
+            instance D is Dev
+            stream A { source: D.Out[auto] channels: 8 protocol: "AES67" }
+        "#);
+        let hits: Vec<_> = diags
+            .iter()
+            .filter(|d| d.message.contains("'auto'"))
+            .collect();
+        assert_eq!(hits.len(), 1, "expected one auto diagnostic: {:?}", diags);
+        assert_eq!(hits[0].severity, Severity::Info, "{:?}", hits[0]);
+    }
+
+    #[test]
+    fn auto_does_not_trip_the_count_rules() {
+        // [auto] flattens to nothing, so it must be treated as "no selection"
+        // by F02/F04 rather than as a zero-wide one.
+        let diags = flow_diags(r#"
+            template Dev { ports { Out[1..8]: out(etherCON) [Dante] } }
+            instance D is Dev
+            stream A { source: D.Out[auto] channels: 8 protocol: "AES67" }
+        "#);
+        assert!(!diags.iter().any(|d| d.message.contains("selects")),
+            "[auto] must not be read as a 0-channel selection: {:?}", diags);
+    }
+
+    // --- Blast radius: the real fixtures gain no diagnostics ---
+
+    #[test]
+    fn real_fixtures_gain_no_selection_diagnostics() {
+        let fixtures: [(&str, &str); 2] = [
+            (
+                "10-aes67-interop.patch",
+                include_str!("../../../../../tests/fixtures/mtg-features/10-aes67-interop.patch"),
+            ),
+            (
+                "hillsong-mtg.patch",
+                include_str!("../../../../../tests/fixtures/examples/hillsong-mtg.patch"),
+            ),
+        ];
+
+        for (name, source) in fixtures {
+            let result = parse(source);
+            assert!(result.is_valid(), "{name} should parse cleanly: {:?}", result.errors);
+            let diags = drc::run_all(&result.program, &LibraryContext::empty());
+            let new_rule_hits: Vec<_> = diags
+                .iter()
+                .filter(|d| {
+                    d.layer == DRCLayer::Flow
+                        && (d.message.contains("8 channels per flow")
+                            || d.message.contains("selects")
+                            || d.message.contains("more than one position")
+                            || d.message.contains("'auto'"))
+                })
+                .collect();
+            assert!(
+                new_rule_hits.is_empty(),
+                "{name} should gain no F02/F04/F05/auto diagnostics: {new_rule_hits:#?}"
+            );
+        }
+    }
+
     // --- F03: Multicast prefix mismatch ---
 
     #[test]

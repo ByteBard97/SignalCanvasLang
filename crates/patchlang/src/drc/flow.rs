@@ -1,15 +1,17 @@
-//! Flow DRC checks — rules F01–F03.
+//! Flow DRC checks — rules F01–F05.
 //!
 //! AES67 interoperability diagnostics:
 //! - F01: Flow slot exhaustion (stream count vs chipset limit)
 //! - F02: AES67 stream channel limit (max 8 per flow)
 //! - F03: Multicast prefix mismatch between AES67 devices
+//! - F04: `channels` disagrees with the source channel selection length
+//! - F05: The same source channel appears at more than one position in a flow
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
-use crate::ast::{KvValue, PatchProgram, Statement};
+use crate::ast::{IndexElement, KvValue, PatchProgram, Statement, StreamDecl};
 use crate::drc::catalog;
-use crate::drc::helpers::{collect_all_connects, DRCContext};
+use crate::drc::helpers::{collect_all_connects, expand_index_spec, DRCContext};
 use crate::drc::types::{DRCLayer, Diagnostic, Severity};
 
 const LAYER: DRCLayer = DRCLayer::Flow;
@@ -20,7 +22,38 @@ pub fn check(program: &PatchProgram, ctx: &DRCContext<'_>) -> Vec<Diagnostic> {
     check_flow_slot_exhaustion(program, ctx, &mut diags);
     check_aes67_channel_limit(program, &mut diags);
     check_multicast_prefix_mismatch(program, ctx, &mut diags);
+    check_channel_count_mismatch(program, &mut diags);
+    check_duplicate_source_channels(program, &mut diags);
+    check_auto_in_stream_source(program, &mut diags);
     diags
+}
+
+/// Iterate the program's stream declarations.
+fn streams(program: &PatchProgram) -> impl Iterator<Item = &StreamDecl> {
+    program.statements.iter().filter_map(|stmt| match stmt {
+        Statement::Stream(stream) => Some(stream),
+        _ => None,
+    })
+}
+
+/// The ordered source channel selection of a stream, plus whether `[auto]`
+/// appeared in it. The selection is empty when the stream has no index.
+///
+/// Expansion is delegated to `helpers::expand_index_spec` — this module must not grow
+/// its own copy of that loop. The only thing added here is `has_auto`: the shared
+/// expander drops `Auto` silently, and the auto diagnostic exists precisely because
+/// that drop is otherwise invisible.
+fn source_selection(stream: &StreamDecl) -> (Vec<u32>, bool) {
+    let spec = match stream.source.as_ref().and_then(|source| source.index.as_ref()) {
+        Some(spec) => spec,
+        None => return (Vec::new(), false),
+    };
+
+    let has_auto = spec
+        .elements
+        .iter()
+        .any(|element| matches!(element, IndexElement::Auto));
+    (expand_index_spec(spec), has_auto)
 }
 
 /// F01 — Count stream declarations per source device and compare against chipset flow limit.
@@ -103,7 +136,14 @@ fn check_aes67_channel_limit(program: &PatchProgram, diags: &mut Vec<Diagnostic>
                 continue;
             }
 
-            let channels = declared_channels(&stream.properties);
+            // An explicit selection is the authority on how wide the flow is;
+            // `channels` is only the fallback. F04 reports any disagreement.
+            let (selection, _) = source_selection(stream);
+            let channels = if selection.is_empty() {
+                declared_channels(&stream.properties)
+            } else {
+                Some(selection.len() as u32)
+            };
 
             if let Some(ch) = channels {
                 if ch > 8 {
@@ -146,6 +186,121 @@ fn declared_channels(properties: &[crate::ast::KeyValue]) -> Option<u32> {
             _ => None,
         }
     })
+}
+
+/// F04 — The declared `channels` count disagrees with the source selection length.
+///
+/// The selection is kept as the user wrote it rather than silently recomputing
+/// `channels`, so the disagreement is reported instead. Streams without a
+/// selection have nothing to disagree with and are skipped.
+fn check_channel_count_mismatch(program: &PatchProgram, diags: &mut Vec<Diagnostic>) {
+    for stream in streams(program) {
+        let (selection, _) = source_selection(stream);
+        if selection.is_empty() {
+            continue;
+        }
+        // Read as Num *or* Str from the first line — reading only Num is what
+        // left F02 dead for its entire life.
+        let declared = match declared_channels(&stream.properties) {
+            Some(d) => d,
+            None => continue,
+        };
+        let selected = selection.len() as u32;
+        if declared == selected {
+            continue;
+        }
+        diags.push(Diagnostic {
+            severity: Severity::Warning,
+            layer: LAYER.clone(),
+            message: format!(
+                "Stream '{}' declares {} channels but its source selects {} \
+                 ({}). The two must agree.",
+                stream.name,
+                declared,
+                selected,
+                selection
+                    .iter()
+                    .map(|c| c.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            span: Some(stream.span.clone()),
+            source: None,
+            target: None,
+            fix: Some(format!(
+                "Set channels to {} on '{}', or correct the source channel selection",
+                selected, stream.name
+            )),
+        });
+    }
+}
+
+/// F05 — The same source channel appears at more than one position in a flow.
+///
+/// Informational, not a warning: position is significant, so `[3, 1, 3]` is a
+/// legitimate replication of one mono source onto two receiver positions. The
+/// message asks whether the repeat is intended; it does not assert a fault.
+fn check_duplicate_source_channels(program: &PatchProgram, diags: &mut Vec<Diagnostic>) {
+    for stream in streams(program) {
+        let (selection, _) = source_selection(stream);
+        let mut seen: HashSet<u32> = HashSet::new();
+        let mut reported: HashSet<u32> = HashSet::new();
+        for channel in &selection {
+            if seen.insert(*channel) || !reported.insert(*channel) {
+                continue;
+            }
+            diags.push(Diagnostic {
+                severity: Severity::Info,
+                layer: LAYER.clone(),
+                message: format!(
+                    "Stream '{}' selects source channel {} at more than one position. \
+                     Position is significant, so this may be deliberate replication \
+                     of one source onto several receiver channels — is the repeat intended?",
+                    stream.name, channel
+                ),
+                span: Some(stream.span.clone()),
+                source: None,
+                target: None,
+                fix: Some(format!(
+                    "If the repeat was not intended, remove the duplicate {} \
+                     from the source selection on '{}'",
+                    channel, stream.name
+                )),
+            });
+        }
+    }
+}
+
+/// `[auto]` in a stream source has no meaning and is dropped from the selection.
+///
+/// Reported because `[auto]` and an absent index both flatten to an empty
+/// selection, so without this the drop would be completely silent.
+fn check_auto_in_stream_source(program: &PatchProgram, diags: &mut Vec<Diagnostic>) {
+    for stream in streams(program) {
+        let (_, has_auto) = source_selection(stream);
+        if !has_auto {
+            continue;
+        }
+
+        diags.push(Diagnostic {
+            severity: Severity::Info,
+            layer: LAYER.clone(),
+            message: format!(
+                "Stream '{}' uses 'auto' in its source channel selection. \
+                 'auto' has no meaning for a stream source and is dropped, \
+                 so the selection it contributes is empty.",
+                stream.name
+            ),
+            span: Some(stream.span.clone()),
+            source: None,
+            target: None,
+            fix: Some(format!(
+                "Replace 'auto' with explicit channel indices on '{}', \
+                 or drop the index entirely",
+                stream.name
+            )),
+        });
+    }
 }
 
 /// F03 — Multicast prefix mismatch between AES67 devices.
