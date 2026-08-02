@@ -784,3 +784,40 @@ This also aligns Rust with the frontend, which already synthesizes `bus.name || 
 **Related:** #34. See also #35 — `formatter_emit` escapes nothing, so a `display_name` containing a quote is silently truncated. That is a separate defect in the same function; this decision does not address it, and a `display_name` with a quote will now reach it via this path.
 
 **Affects:** `builder/canvas_emit/routes.rs`, `builder_tests/canvas_bus_route_tests.rs`, `builder_tests/canvas_test_helpers.rs`.
+
+### D025 — Stream Channel Selection Rides the Source Port Ref
+**2026-08-02** | **Decided**
+
+**Question:** An AES67 TX stream is a *named selection of existing Dante output channels* re-sent as a multicast flow — the engineer picks which channels (say Dante outs 1, 3, 5, 7) go on the flow, and position matters because an AES67 receiver maps by position. Where does that selection live in a `.patch` file?
+
+**Decision:** On the existing `source` port ref's index spec — `source: DM7.Dante_Out[1,3,5,7]` — not as a `source_channels: "1,3,5,7"` string property.
+
+**No grammar work was required.** The request (#37) was filed as a grammar addition, but `PortRef` has always carried `index: Option<IndexSpec>`, and `parse_body_with_port_ref_key` accepts any property key. Both syntaxes proposed in the issue already parsed, emitted, and round-tripped before a line was written. Verified against the tree: `source: DM7.Dante_Out[7, 1, 5, 3]` parses with zero errors and preserves non-monotonic order; ranges work with `..` (not `-`).
+
+The real gap was the canvas DTO bridge — `canvas_emit` hardcoded `index: None`, `canvas_load` read only `protocol`/`channels`/`direction`, and neither `StreamEmitInput` nor `StreamOutput` had a field to carry a selection.
+
+**Why the index spec and not a string property.**
+
+| Option | Consequence |
+|--------|-------------|
+| `source_channels: "1,3,5,7"` | Stringly-typed; duplicates what the port ref already expresses; can desync from `channels`; a second parser to write and maintain |
+| Accept both forms | Two ways to say one thing, permanently |
+| **Index spec on `source`** | Structured, already modelled in the AST, the same mechanism connections use for channel selection, ranges free |
+
+The frontend is unaffected by the choice: the DTO exposes a flat ordered `source_channels: Vec<u32>` in both directions, matching the `TxStream.sourceChannels` the frontend already models. We did not also accept the string form — the frontend emitter had not shipped, so no files in the wild used it (YAGNI).
+
+**The selection is never sorted, deduped, or coalesced into ranges.** Position is semantically significant, so `[7, 1, 5, 3]` emits in exactly that order. For the same reason a repeated index is *not* an error: `[3, 1, 3]` is legitimate replication of one mono source onto two receiver positions, so F05 reports it as `Info` phrased as a question, never a fault.
+
+**`channels` stays and is diagnosed, not derived away.** Keeping the property is non-breaking for every existing file and consumer. When a selection is present the emitter derives `channels` from its length, so canvas-emitted files are self-consistent by construction; F04 exists for hand-authored files.
+
+**A latent port-id defect surfaced.** `resolve_port_id` renders a *one*-element index as `Inst:Port_3`, so a legal 1-channel flow compiled to a `StreamIdentity.source_port` naming a port node that does not exist. The fix is applied **at the stream call site only**: `resolve_port_id` has exactly three callers — signal origins, stream sources, and config labels — and config labels *depend* on the `_N` suffix to find their channel node. Connections never call it; their suffix comes from `edges.rs`. An earlier draft of the plan proposed guarding this with a connection test, which would have tested nothing.
+
+**Known limits, stated rather than buried:**
+
+1. **The selection does not reach `GraphLevel`.** After the port-id fix the index is discarded and `StreamIdentity` has no field for it. Acceptable because the router work already landed and only emit/load was waiting — but this is the one real argument for the string form.
+2. **Range expansion is not idempotent.** Load expands `[9, 1..4, 7]` and emit writes only singles, so a hand-authored `1..8` returns as `1, 2, 3, 4, 5, 6, 7, 8` after the first canvas save.
+3. On a **ranged** port the bare post-fix port id names no node port for any selection width — a pre-existing gap that predates #37, not one it introduces.
+
+**Related:** #37, FrontendV1#42. F02 was fixed alongside as a separate commit — it matched `channels` only as `KvValue::Num` while the canvas emits it via `kv_str`, so the AES67 8-channel limit had never once fired on a canvas-emitted file.
+
+**Affects:** `builder/canvas_input.rs`, `builder/canvas_output.rs`, `builder/canvas_emit/structures.rs`, `builder/canvas_load.rs`, `graph/mod.rs`, `drc/flow.rs`.

@@ -450,6 +450,12 @@ flag-decl   = "flag"   identifier [ "{" { key-value-pair } "}" ] ;
 stream-decl = "stream" identifier [ "{" { key-value-pair } "}" ] ;
 ```
 
+A stream's `source` may carry an index spec selecting which of the source interface's
+channels ride the flow. The selection is **ordered and position-significant** — an AES67
+receiver maps by position, so `[7, 1, 5, 3]` is not the same flow as `[1, 3, 5, 7]`. It is
+never sorted or deduplicated, and a repeated index means deliberate replication of one
+source onto two receiver positions. No index means the whole interface. See D025.
+
 ```
 signal Lead_Vocal {
   origin: Stage_Left.Mic_In[1]
@@ -461,6 +467,12 @@ stream SL_Dante_Primary {
   source: Stage_Left.Dante_Pri_Out
   channels: "32"
   protocol: "Dante"
+}
+
+stream Drums_AES67 {
+  source: DM7.Dante_Out[1, 3, 5, 7]
+  channels: "4"
+  protocol: "AES67"
 }
 
 flag Genlock_OK {
@@ -889,6 +901,8 @@ The compiler runs DRC checks after parsing and auto-resolution. Diagnostics have
 | R04 | Ring | Error | Implicit member ambiguous (zero or multiple matching ports) |
 | F01 | Flow | Warning | Flow slot exhaustion — stream count exceeds Dante chipset limit |
 | F02 | Flow | Info | AES67 stream exceeds 8 channels — hardware auto-splits into multiple flows |
+| F04 | Flow | Warning | `channels` disagrees with the source channel selection length |
+| F05 | Flow | Info | The same source channel appears at more than one position in a flow — replication, or a mistake? |
 | F03 | Flow | Error | Multicast prefix mismatch between AES67 devices — silent audio failure |
 | C01 | Convention | Info | Orphaned device (no connections, bridges, rings, or config) |
 | C02 | Convention | Warning | Duplicate connection (same source-target pair) |

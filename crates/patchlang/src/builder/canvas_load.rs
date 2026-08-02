@@ -192,6 +192,12 @@ pub fn load_from_patch(patch_source: &str, _layout_json: &str) -> Result<CanvasL
             channel_count,
             port_name: source.port.clone(),
             direction,
+            // The ordered channel selection (#37). Flattened, never sorted or
+            // deduplicated: position is what an AES67 receiver maps by, so
+            // `[7, 1, 5, 3]` and `[1, 3, 5, 7]` are different flows. An absent
+            // index — and a `[auto]`, which carries no channel meaning here —
+            // both yield the empty selection, i.e. "the whole interface".
+            source_channels: expand_index(&source.index),
         });
     }
 
@@ -746,6 +752,13 @@ fn build_channel_mappings_from_indices(
     }).collect()
 }
 
+/// Expand an index spec into a flat channel list, in declaration order.
+///
+/// Never sort and never deduplicate this result. For a stream's source selection the
+/// order *is* the wiring — an AES67 receiver maps by position — so `[7, 1, 5, 3]` and
+/// `[1, 3, 5, 7]` are different flows, and a repeated index is deliberate replication
+/// of one source onto two receiver positions (#37, D025). `Auto` carries no channel
+/// meaning here and is skipped.
 fn expand_index(index: &Option<crate::ast::IndexSpec>) -> Vec<u32> {
     let Some(spec) = index else { return Vec::new() };
     let mut channels = Vec::new();

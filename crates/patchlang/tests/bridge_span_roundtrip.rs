@@ -120,6 +120,7 @@ fn rebuild_input_from_load(loaded: &CanvasLoadOutput) -> CanvasEmitInput {
             protocol: s.protocol.clone(),
             channel_count: s.channel_count,
             interface_id: format!("pl::{}::{}", inst.template_name, s.port_name),
+            source_channels: s.source_channels.clone(),
         }).collect();
 
         let rx_streams: Vec<StreamEmitInput> = inst.rx_streams.iter().map(|s| StreamEmitInput {
@@ -127,6 +128,7 @@ fn rebuild_input_from_load(loaded: &CanvasLoadOutput) -> CanvasEmitInput {
             protocol: s.protocol.clone(),
             channel_count: s.channel_count,
             interface_id: format!("pl::{}::{}", inst.template_name, s.port_name),
+            source_channels: s.source_channels.clone(),
         }).collect();
 
         InstanceEmitInput {

@@ -340,6 +340,7 @@ fn emit_card_slot_stream_survives_roundtrip() {
         protocol: "AES67".into(),
         channel_count: 8,
         interface_id: "slot::Client::0__1__pl::AES67_108_G2::AES67_Out".into(),
+        source_channels: vec![],
     }];
 
     let input = CanvasEmitInput {

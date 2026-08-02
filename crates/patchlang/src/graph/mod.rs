@@ -232,7 +232,7 @@ pub fn compile_ast_to_graph(ast: &PatchProgram, library: &LibraryContext) -> Com
     for stream in &stream_decls {
         let props = kv_to_string_map(&stream.properties);
         let (source_node, source_port) = if let Some(ref src) = stream.source {
-            (src.instance.clone(), Some(resolve_port_id(src)))
+            (src.instance.clone(), Some(resolve_stream_source_port_id(src)))
         } else {
             (None, None)
         };
@@ -476,7 +476,25 @@ fn mark_port_connectivity(
     }
 }
 
+/// Resolve a `stream`'s source `PortRef` to a port ID string (#37).
+///
+/// A stream's channel selection describes the flow, not the port: the source of
+/// `stream S { source: DSP.AES67_Out[3] }` is the `AES67_Out` interface, exactly as
+/// it is for a stream with no index or with `[7, 1, 5, 3]`. Deliberately NOT routed
+/// through `resolve_port_id`, and `resolve_port_id` must not be "simplified" to match
+/// it: its other two callers — config labels and signal origins — depend on a
+/// one-element index resolving to the channel port (`Inst:Port_3`), which is how a
+/// label finds the channel it belongs to.
+fn resolve_stream_source_port_id(port_ref: &crate::ast::PortRef) -> String {
+    let inst = port_ref.instance.as_deref().unwrap_or("");
+    format!("{inst}:{}", port_ref.port)
+}
+
 /// Resolve a `PortRef` to a port ID string.
+///
+/// A one-element index resolves to that channel's port (`Inst:Port_3`); anything
+/// wider resolves to the bare port. See `resolve_stream_source_port_id` for why
+/// streams do not use this.
 fn resolve_port_id(port_ref: &crate::ast::PortRef) -> String {
     let inst = port_ref.instance.as_deref().unwrap_or("");
     if let Some(ref idx) = port_ref.index {

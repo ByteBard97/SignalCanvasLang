@@ -660,3 +660,142 @@ fn test_fixture_hillsong_mtg_multi_file() {
         "found {missing_node_refs} edges referencing non-existent nodes"
     );
 }
+
+// ---------------------------------------------------------------------------
+// 10. Stream source channel selection (#37, Phase 2b)
+//
+// A `stream`'s source may carry a channel selection (`source: DSP.AES67_Out[3]`).
+// The selection belongs to the flow, not to the port id: `StreamIdentity.source_port`
+// must always name the interface's port, never one channel of it. Before the fix a
+// ONE-element index leaked into the id as `Inst:Port_3`, so a legal single-channel
+// AES67 flow pointed at a port that does not exist.
+// ---------------------------------------------------------------------------
+
+/// The realistic AES67 shape: one scalar network jack carrying N audio channels.
+/// Here the emitted port id is checkable against the node's real ports.
+#[test]
+fn test_stream_single_channel_selection_names_an_existing_port() {
+    let source = r#"
+template QSys_Core {
+  ports {
+    AES67_Out: out(RJ45) [AES67]
+  }
+}
+instance DSP is QSys_Core
+stream Talkback {
+  source: DSP.AES67_Out[3]
+  channels: 1
+  protocol: "AES67"
+}
+"#;
+    let result = parse_graph(source);
+    let stream = result.streams.get("Talkback").expect("Talkback stream");
+    assert_eq!(
+        stream.source_port.as_deref(),
+        Some("DSP:AES67_Out"),
+        "a single-channel selection must not leak into the stream's source port id"
+    );
+
+    let node = result
+        .levels
+        .get("root")
+        .expect("root level")
+        .nodes
+        .get("DSP")
+        .expect("DSP node");
+    assert!(
+        node.ports.iter().any(|p| p.id == "DSP:AES67_Out"),
+        "the stream's source_port must name a port that exists on the node, got {:?} of {:?}",
+        stream.source_port,
+        node.ports.iter().map(|p| &p.id).collect::<Vec<_>>()
+    );
+}
+
+/// The selection width must not change the port id: no index, one index and many
+/// indices all resolve to the same interface port.
+///
+/// Note: on a *ranged* port (as here) that id names no port node — the bare base name
+/// never exists once the range is expanded. That is pre-existing for the no-index and
+/// multi-index cases; this test extends it to width 1. The selection now lives in the
+/// canvas DTO, not in the graph, so the graph deliberately says nothing about it.
+#[test]
+fn test_stream_source_port_is_independent_of_selection_width() {
+    let source = r#"
+template Shure_MXA910 {
+  ports {
+    Dante_Pri_Out[1..10]: out(etherCON) [Dante]
+  }
+}
+instance Ceiling_Mic is Shure_MXA910
+stream Whole {
+  source: Ceiling_Mic.Dante_Pri_Out
+  channels: 10
+}
+stream One {
+  source: Ceiling_Mic.Dante_Pri_Out[3]
+  channels: 1
+}
+stream Some_Of_Them {
+  source: Ceiling_Mic.Dante_Pri_Out[7, 1, 5, 3]
+  channels: 4
+}
+"#;
+    let result = parse_graph(source);
+    for name in ["Whole", "One", "Some_Of_Them"] {
+        let stream = result.streams.get(name).unwrap_or_else(|| panic!("{name} stream"));
+        assert_eq!(
+            stream.source_port.as_deref(),
+            Some("Ceiling_Mic:Dante_Pri_Out"),
+            "stream {name} must resolve to the interface port regardless of its selection"
+        );
+    }
+}
+
+/// The stream fix must NOT be applied inside `resolve_port_id` itself: config labels
+/// and signal origins both depend on a one-element index resolving to the channel
+/// port (`Inst:Port_3`), which is how a label finds the channel it belongs to.
+#[test]
+fn test_single_index_still_resolves_to_channel_port_for_labels_and_signals() {
+    let source = r#"
+template Rio3224 {
+  ports {
+    Mic_In[1..32]: in(XLR)
+  }
+}
+instance Stage_Left is Rio3224
+
+signal Lead_Vox {
+  origin: Stage_Left.Mic_In[3]
+}
+
+config Channel_Labels {
+  label Stage_Left.Mic_In[3]: "Lead Vocal"
+}
+"#;
+    let result = parse_graph(source);
+
+    let signal = result.signals.get("Lead_Vox").expect("Lead_Vox signal");
+    assert_eq!(
+        signal.origin_port.as_deref(),
+        Some("Stage_Left:Mic_In_3"),
+        "a signal origin with a single index must still name the channel port"
+    );
+
+    let node = result
+        .levels
+        .get("root")
+        .expect("root level")
+        .nodes
+        .get("Stage_Left")
+        .expect("Stage_Left node");
+    let port = node
+        .ports
+        .iter()
+        .find(|p| p.id == "Stage_Left:Mic_In_3")
+        .expect("Mic_In_3");
+    assert_eq!(
+        port.label.as_deref(),
+        Some("Lead Vocal"),
+        "a config label on Port[3] must still find the channel port"
+    );
+}

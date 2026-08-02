@@ -118,6 +118,25 @@ fn bridge_index_for_span(
 // Streams
 // ---------------------------------------------------------------------------
 
+/// Build a stream source's channel selection (#37).
+///
+/// Deliberately unlike `bridge_index_for_span`: the selection is user intent and its
+/// order is semantically significant — an AES67 receiver maps channels by position —
+/// so the values are written as ordered `Single`s and are never sorted, deduplicated,
+/// or coalesced into a `Range`. An empty selection means "the whole interface" and
+/// emits no index at all, byte-identical to the pre-#37 emitter.
+fn stream_source_index(source_channels: &[u32]) -> Option<IndexSpec> {
+    if source_channels.is_empty() {
+        return None;
+    }
+    Some(IndexSpec {
+        elements: source_channels
+            .iter()
+            .map(|&value| IndexElement::Single { value })
+            .collect(),
+    })
+}
+
 pub(super) fn emit_streams_for(
     builder: &mut PatchProgramBuilder,
     inst: &InstanceEmitInput,
@@ -142,8 +161,18 @@ pub(super) fn emit_streams_for(
         };
         let side = if direction == "rx" { PortSide::Input } else { PortSide::Output };
         let port_name = directional_port_name(iface, side);
+        let index = stream_source_index(&stream.source_channels);
+        // A selection is the authoritative width: derive `channels` from it so a
+        // canvas-emitted file is self-consistent by construction and can never be
+        // born tripping the channels-vs-selection DRC rule. With no selection the
+        // frontend's count is emitted verbatim, exactly as before (#37).
+        let channels = if stream.source_channels.is_empty() {
+            stream.channel_count
+        } else {
+            stream.source_channels.len() as u32
+        };
         let mut props = vec![
-            kv_str("channels", &stream.channel_count.to_string()),
+            kv_str("channels", &channels.to_string()),
             kv_str("direction", direction),
         ];
         if !stream.protocol.is_empty() {
@@ -156,7 +185,7 @@ pub(super) fn emit_streams_for(
             source: Some(PortRef {
                 instance: Some(inst.name.clone()),
                 port: port_name,
-                index: None,
+                index,
             }),
             span: builder_span(),
         };

@@ -196,6 +196,14 @@ pub struct StreamEmitInput {
     pub protocol: String,
     pub channel_count: u32,
     pub interface_id: String,
+    /// Ordered indices into the source interface's channels (#37). Position is
+    /// significant — an AES67 receiver maps by position, so this is never sorted.
+    /// Empty means "the whole interface", which emits exactly as before.
+    ///
+    /// `#[serde(default)]` is REQUIRED: frontend payloads written before #37 omit
+    /// the field entirely, and without it every one of them fails to deserialize.
+    #[serde(default)]
+    pub source_channels: Vec<u32>,
 }
 
 #[derive(Debug, Clone, Deserialize, TS)]

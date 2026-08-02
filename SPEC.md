@@ -315,6 +315,22 @@ stream-decl = "stream" identifier [ "{" { key-value-pair } "}" ] ;
 
 The `origin` property in signals and `source` property in streams accept port references as values.
 
+A stream's `source` may carry an **index spec** naming which of the source interface's
+channels are on the flow — an AES67 TX stream is a selection of existing Dante output
+channels re-sent as a multicast flow. The selection is **ordered and position-significant**,
+because an AES67 receiver maps by position: `[7, 1, 5, 3]` and `[1, 3, 5, 7]` are different
+flows. It is never sorted or deduplicated on emit, and a repeated index is legitimate
+replication of one source onto two receiver positions, not an error. Omitting the index
+means the whole interface. See D025.
+
+```
+stream Drums_AES67 {
+  source: DM7.Dante_Out[1, 3, 5, 7]
+  channels: "4"
+  protocol: "AES67"
+}
+```
+
 ```
 signal Lead_Vocal {
   origin: Stage_Left.Mic_In[1]

@@ -81,6 +81,7 @@ fn emit_stream_on_chassis_port_is_included() {
         protocol: "Dante".into(),
         channel_count: 32,
         interface_id: "dante_pri".into(),
+        source_channels: vec![],
     }];
     let input = CanvasEmitInput {
         instances: vec![inst],
@@ -136,6 +137,7 @@ fn emit_stream_on_card_slot_port_is_not_dropped() {
         protocol: "AES67".into(),
         channel_count: 64,
         interface_id: "card_aes67_out".into(),
+        source_channels: vec![],
     }];
     let input = CanvasEmitInput {
         instances: vec![inst],
@@ -244,6 +246,7 @@ fn emit_rx_stream_uses_input_port_name() {
         protocol: "Dante".into(),
         channel_count: 72,
         interface_id: "dante_pri".into(),
+        source_channels: vec![],
     }];
     let input = CanvasEmitInput {
         instances: vec![inst],
@@ -285,6 +288,7 @@ fn emit_tx_stream_uses_output_port_name() {
         protocol: "Dante".into(),
         channel_count: 32,
         interface_id: "dante_pri".into(),
+        source_channels: vec![],
     }];
     let input = CanvasEmitInput {
         instances: vec![inst],
@@ -307,3 +311,111 @@ fn emit_tx_stream_uses_output_port_name() {
 // ---------------------------------------------------------------------------
 
 
+// ---------------------------------------------------------------------------
+// Stream source channel selection (#37, Phase 2)
+// ---------------------------------------------------------------------------
+
+/// Build a one-instance canvas payload carrying a single TX stream.
+fn emit_tx_stream(channel_count: u32, source_channels: Vec<u32>) -> String {
+    let mut inst = make_simple_instance(
+        "DSP",
+        "QSys_Core",
+        "QSC",
+        vec![make_interface(
+            "aes67",
+            "AES67",
+            "io",
+            Some("AES67"),
+            8,
+            vec![],
+        )],
+    );
+    inst.tx_streams = vec![StreamEmitInput {
+        label: "Talkback".into(),
+        protocol: "AES67".into(),
+        channel_count,
+        interface_id: "aes67".into(),
+        source_channels,
+    }];
+    emit_from_canvas_input(CanvasEmitInput {
+        instances: vec![inst],
+        connections: vec![],
+        manufacturer_cards: vec![],
+    })
+    .unwrap()
+}
+
+/// Extract the `stream <name> { ... }` block from an emitted patch, braces included.
+fn stream_block(patch: &str, name: &str) -> String {
+    let start = patch
+        .find(&format!("stream {name} "))
+        .unwrap_or_else(|| panic!("no `stream {name}` in:\n{patch}"));
+    let end = patch[start..]
+        .find("\n}")
+        .unwrap_or_else(|| panic!("unterminated stream block in:\n{patch}"));
+    patch[start..start + end + 2].to_string()
+}
+
+/// Position is semantically significant on an AES67 flow — the receiver maps by
+/// position — so the selection must survive emit in the caller's order, never
+/// sorted and never coalesced into a range.
+#[test]
+fn emit_stream_preserves_non_monotonic_channel_selection() {
+    let patch = emit_tx_stream(4, vec![7, 1, 5, 3]);
+    let block = stream_block(&patch, "Talkback");
+    assert!(
+        block.contains("source: DSP.AES67_Out[7, 1, 5, 3]"),
+        "selection must be emitted in caller order:\n{block}"
+    );
+    assert!(
+        !block.contains("[1, 3, 5, 7]"),
+        "selection must NOT be sorted:\n{block}"
+    );
+    assert!(
+        !block.contains(".."),
+        "selection must NOT be coalesced into a range:\n{block}"
+    );
+}
+
+/// A contiguous ascending run is still written as individual singles — coalescing
+/// it into `1..4` would lose the guarantee that what comes back out is what went in.
+#[test]
+fn emit_stream_does_not_coalesce_a_contiguous_selection() {
+    let patch = emit_tx_stream(4, vec![1, 2, 3, 4]);
+    assert!(
+        patch.contains("source: DSP.AES67_Out[1, 2, 3, 4]"),
+        "contiguous selection must stay as singles:\n{patch}"
+    );
+}
+
+/// An empty selection is "the whole interface" and must emit exactly what the
+/// pre-#37 emitter wrote — every existing canvas file depends on it.
+#[test]
+fn emit_stream_without_selection_is_unchanged() {
+    let patch = emit_tx_stream(8, vec![]);
+    assert_eq!(
+        stream_block(&patch, "Talkback"),
+        "stream Talkback {\n  \
+           source: DSP.AES67_Out\n  \
+           channels: \"8\"\n  \
+           direction: \"tx\"\n  \
+           protocol: \"AES67\"\n}",
+        "no selection must emit byte-identical output to the pre-#37 emitter:\n{patch}"
+    );
+}
+
+/// With a selection present, `channels` is derived from the selection length rather
+/// than echoing the frontend's `channel_count`, so a canvas-emitted file can never be
+/// born self-inconsistent. Here the payload disagrees on purpose: 8 vs a 3-wide pick.
+#[test]
+fn emit_stream_derives_channels_from_selection_length() {
+    let patch = emit_tx_stream(8, vec![2, 4, 6]);
+    assert!(
+        patch.contains("channels: \"3\""),
+        "channels must be derived from the selection length:\n{patch}"
+    );
+    assert!(
+        !patch.contains("channels: \"8\""),
+        "the frontend's channel_count must not win over the selection:\n{patch}"
+    );
+}

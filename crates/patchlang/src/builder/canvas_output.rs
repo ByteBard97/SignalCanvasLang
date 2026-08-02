@@ -188,6 +188,9 @@ pub struct StreamOutput {
     pub channel_count: u32,
     pub port_name: String,
     pub direction: String,
+    /// Ordered indices into the source interface's channels (#37), flattened from the
+    /// source port ref's index spec. Empty when the stream selects the whole interface.
+    pub source_channels: Vec<u32>,
 }
 
 #[derive(Debug, Serialize, TS)]
