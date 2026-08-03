@@ -39,6 +39,39 @@ jobs:
       - name: Run integration tests (patchlang)
         run: cargo test -p patchlang --tests
 
+  # patchlang-python is a PyO3 extension, so its failure modes are runtime-only:
+  # a `#[pyo3(signature = ...)]` string and the Rust parameter list can disagree,
+  # compile perfectly, and fail at import. `cargo check` cannot see it — only
+  # actually importing the built wheel can. See #36.
+  python:
+    name: Python
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          args: >-
+            --release
+            --manifest-path crates/patchlang-python/Cargo.toml
+            --out dist
+          manylinux: auto
+
+      - name: Install the wheel
+        run: pip install --find-links dist --no-index patchlang_python
+
+      - name: Run Python tests
+        run: python tests/test_python.py
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
