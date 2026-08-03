@@ -841,7 +841,7 @@ The frontend is unaffected by the choice: the DTO exposes a flat ordered `source
 
 **Encode and decode share one table.** `lexer::ESCAPES` is the single source of truth; the emitter reads it in reverse. Two independent tables would drift, and a drifted pair still passes a naive round-trip test — because escape and unescape being inverse *mistakes* looks identical to their being inverse *correct* functions. Guarded by asserting the emitted text literally, not only the recovered value.
 
-**The proptest nearly wasn't one.** proptest's default string strategy essentially never generates `"` or `\`, so `any::<String>()` would have passed against the *unfixed* code. The generator uses an alphabet deliberately biased toward the hostile characters. A property test that cannot fail against the bug it targets is decoration.
+**The proptest uses a hostile alphabet.** `any::<String>()` does reach `"` and `\` — verified by mutation: with the escaping removed it fails on the minimal input `"`. But it reaches them only probabilistically, diluted across the whole `char` range, which makes the signal slow and flaky. The generator therefore draws from an alphabet biased toward the characters that break naive emission, so the failure is immediate and deterministic. Both the proptest and every targeted fixture were confirmed to fail against the unfixed emitter.
 
 **Known behaviour change:** source containing a lone trailing backslash (`"trailing\"`) previously lexed as the value `trailing\`; it now raises a lex error, since `\"` is consumed as an escape and the literal is unterminated. Unreachable in existing data by the no-backslash finding above.
 

@@ -240,9 +240,10 @@ connect Mixer.Out[1] -> Mixer.In[1] {
 
     // ---- Property test -----------------------------------------------------
 
-    /// Alphabet biased towards the characters that break naive emission. The
-    /// default proptest string strategy would essentially never produce `"` or
-    /// `\`, which is exactly what makes this class of bug survive fuzzing.
+    /// Alphabet biased towards the characters that break naive emission, so every
+    /// generated case is a hostile one. `any::<String>()` does reach `"` and `\`
+    /// eventually, but only probabilistically and diluted across the whole char
+    /// range; this alphabet makes the failure immediate and deterministic.
     fn escape_hostile_char() -> impl Strategy<Value = char> {
         prop_oneof![
             Just('"'),

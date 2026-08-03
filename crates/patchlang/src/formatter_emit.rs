@@ -1,6 +1,13 @@
 //! Individual statement emitters for the PatchLang formatter.
 //!
-//! Split from `formatter.rs` to keep each file under 500 lines.
+//! Split from `formatter.rs` so neither file grows unbounded. This one is now 594
+//! lines — past the 500-line target though still inside the 700 hard limit — so the
+//! next emitter added here should come with a further split rather than another
+//! function.
+//!
+//! Every quoted string MUST be written through `emit_quoted`. Bare concatenation is
+//! how #35 happened: a value containing `"` produced text that still parsed but
+//! carried a different value, silently. See D026.
 
 use crate::ast::*;
 
