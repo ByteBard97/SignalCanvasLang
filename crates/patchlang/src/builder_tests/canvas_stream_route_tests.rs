@@ -95,6 +95,64 @@ fn emit_stream_on_chassis_port_is_included() {
     );
 }
 
+/// Two streams whose labels sanitize to the same identifier must BOTH survive.
+///
+/// `add_stream` rejects duplicate names and the emitter swallowed that with
+/// `continue`, so the second stream vanished from the file with no diagnostic —
+/// the same silent-data-loss shape as #38. #37 makes the collision likelier: one
+/// label, two different channel selections is a natural way to split a flow.
+#[test]
+fn emit_streams_with_colliding_labels_both_survive() {
+    let mut inst = make_simple_instance(
+        "DSP",
+        "Rio3224",
+        "Yamaha",
+        vec![
+            make_interface("dante_a", "Dante_A", "io", Some("Dante"), 32, vec![]),
+            make_interface("dante_b", "Dante_B", "io", Some("Dante"), 32, vec![]),
+        ],
+    );
+    // Same user-facing label, two different interfaces and channel selections.
+    inst.tx_streams = vec![
+        StreamEmitInput {
+            label: "Drums".into(),
+            protocol: "AES67".into(),
+            channel_count: 2,
+            interface_id: "dante_a".into(),
+            source_channels: vec![1, 3],
+        },
+        StreamEmitInput {
+            label: "Drums".into(),
+            protocol: "AES67".into(),
+            channel_count: 2,
+            interface_id: "dante_b".into(),
+            source_channels: vec![5, 7],
+        },
+    ];
+    let input = CanvasEmitInput {
+        instances: vec![inst],
+        connections: vec![],
+        manufacturer_cards: vec![],
+    };
+    let patch = emit_from_canvas_input(input).unwrap();
+    assert_eq!(
+        patch.matches("stream ").count(),
+        2,
+        "both streams must be emitted, neither silently dropped:\n{patch}"
+    );
+    // `io` interfaces split into directional ports, hence the `_Out` suffix.
+    assert!(
+        patch.contains("Dante_A_Out[1, 3]") && patch.contains("Dante_B_Out[5, 7]"),
+        "each stream must keep its own source and selection:\n{patch}"
+    );
+    // The collision is resolved by renaming, not by dropping — so the second
+    // stream is present under a suffixed name rather than missing.
+    assert!(
+        patch.contains("stream Drums ") && patch.contains("stream Drums_2 "),
+        "the colliding stream must be renamed, not discarded:\n{patch}"
+    );
+}
+
 #[test]
 fn emit_stream_on_card_slot_port_is_not_dropped() {
     // Riedel Artist 64 with an AES67-108 G2 card in slot 1.

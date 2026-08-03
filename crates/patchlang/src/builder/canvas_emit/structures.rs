@@ -189,13 +189,39 @@ pub(super) fn emit_streams_for(
             }),
             span: builder_span(),
         };
-        // Tolerate duplicate names (different interfaces may share a label).
-        match builder.add_stream(decl) {
-            Ok(()) => {}
-            Err(BuilderError::DuplicateName(_)) => continue,
+        add_stream_under_a_free_name(builder, decl)?;
+    }
+    Ok(())
+}
+
+/// Add a stream, suffixing its name until it does not collide.
+///
+/// Two interfaces legitimately share a user-facing label — one label with two channel
+/// selections is a natural way to split a flow across ports (#37) — but a stream's name
+/// is an identifier and `add_stream` rejects duplicates. This previously swallowed that
+/// rejection with `continue`, so the second stream vanished from the emitted file with no
+/// diagnostic at all: silent data loss, the same shape as #38.
+///
+/// Renaming is the lesser evil, on the same reasoning as D024: the suffix is user-visible
+/// and self-perpetuating once written, which is a real cost, but losing the stream
+/// outright is worse and invisible. `_2` is appended (then `_3`, …) rather than a hash, so
+/// the result stays predictable and hand-editable.
+fn add_stream_under_a_free_name(
+    builder: &mut PatchProgramBuilder,
+    decl: StreamDecl,
+) -> Result<(), BuilderError> {
+    let base = decl.name.clone();
+    let mut candidate = decl;
+    let mut suffix = 2u32;
+    loop {
+        match builder.add_stream(candidate.clone()) {
+            Ok(()) => return Ok(()),
+            Err(BuilderError::DuplicateName(_)) => {
+                candidate.name = format!("{base}_{suffix}");
+                suffix += 1;
+            }
             Err(e) => return Err(e),
         }
     }
-    Ok(())
 }
 
