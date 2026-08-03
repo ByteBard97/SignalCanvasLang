@@ -7,13 +7,39 @@ use crate::ast::*;
 /// Two-space indentation unit (shared with formatter.rs).
 pub(crate) const INDENT: &str = "  ";
 
+/// Write `s` as a quoted PatchLang string literal, escaping it so the lexer reads
+/// back exactly the same value (#35).
+///
+/// The escape set must match `lexer::ESCAPES`. Backslash and quote are correctness —
+/// without them a value like `The "Big" Mix` is silently truncated on re-parse.
+/// Newline, carriage return and tab are hygiene: they survive unescaped, but emitting
+/// them raw makes a `.patch` file non-line-oriented.
+///
+/// Every quoted emission in this file must go through here.
+fn emit_quoted(out: &mut String, s: &str) {
+    out.push('"');
+    for c in s.chars() {
+        match c {
+            '\\' => out.push_str(r"\\"),
+            '"' => out.push_str("\\\""),
+            '\n' => out.push_str(r"\n"),
+            '\r' => out.push_str(r"\r"),
+            '\t' => out.push_str(r"\t"),
+            _ => out.push(c),
+        }
+    }
+    out.push('"');
+}
+
 pub(crate) fn emit_template(out: &mut String, t: &TemplateDecl, indent: &str) {
     out.push_str(indent);
     out.push_str("template ");
     out.push_str(&t.name);
     emit_param_list(out, &t.params);
     if let Some(ver) = &t.version {
-        out.push_str(&format!(" @version(\"{ver}\")"));
+        out.push_str(" @version(");
+        emit_quoted(out, ver);
+        out.push(')');
     }
     out.push_str(" {\n");
 
@@ -75,11 +101,7 @@ fn emit_param_list(out: &mut String, params: &[ParamDef]) {
 
 fn emit_param_value(out: &mut String, val: &ParamValue) {
     match val {
-        ParamValue::Str { value } => {
-            out.push('"');
-            out.push_str(value);
-            out.push('"');
-        }
+        ParamValue::Str { value } => emit_quoted(out, value),
         ParamValue::Num { value } => out.push_str(&value.to_string()),
     }
 }
@@ -133,7 +155,9 @@ pub(crate) fn emit_instance(out: &mut String, inst: &InstanceDecl, indent: &str)
     out.push_str(&inst.template_name);
     emit_arg_list(out, &inst.args);
     if let Some(ver) = &inst.version_constraint {
-        out.push_str(&format!(" @version(\"{ver}\")"));
+        out.push_str(" @version(");
+        emit_quoted(out, ver);
+        out.push(')');
     }
 
     let has_body = !inst.properties.is_empty()
@@ -200,9 +224,9 @@ pub(crate) fn emit_connect(out: &mut String, c: &ConnectDecl, indent: &str) {
         }
         if let Some(mapping) = &c.mapping {
             out.push_str(&inner);
-            out.push_str("mapping: \"");
-            out.push_str(mapping);
-            out.push_str("\"\n");
+            out.push_str("mapping: ");
+            emit_quoted(out, mapping);
+            out.push('\n');
         }
         for kv in &c.properties {
             emit_key_value(out, kv, &inner);
@@ -334,9 +358,8 @@ fn emit_config_label(out: &mut String, label: &ConfigLabel, indent: &str) {
     out.push_str(indent);
     out.push_str("label ");
     emit_port_ref(out, &label.port);
-    out.push_str(": \"");
-    out.push_str(&label.label);
-    out.push('"');
+    out.push_str(": ");
+    emit_quoted(out, &label.label);
     if !label.properties.is_empty() {
         out.push_str(" {\n");
         let inner = format!("{indent}{INDENT}");
@@ -450,9 +473,7 @@ fn emit_slot_assignment(out: &mut String, sa: &SlotAssignment, indent: &str) {
     }
     out.push_str(": ");
     if needs_quoting(&sa.card_name) {
-        out.push('"');
-        out.push_str(&sa.card_name);
-        out.push('"');
+        emit_quoted(out, &sa.card_name);
     } else {
         out.push_str(&sa.card_name);
     }
@@ -476,9 +497,9 @@ fn emit_bus_entry(out: &mut String, bus: &BusEntry, indent: &str) {
     let inner = format!("{indent}{INDENT}");
     if let Some(label) = &bus.label {
         out.push_str(&inner);
-        out.push_str("label: \"");
-        out.push_str(label);
-        out.push_str("\"\n");
+        out.push_str("label: ");
+        emit_quoted(out, label);
+        out.push('\n');
     }
     for input in &bus.inputs {
         out.push_str(&inner);
@@ -505,9 +526,8 @@ fn emit_bus_entry(out: &mut String, bus: &BusEntry, indent: &str) {
     }
     for output in &bus.outputs {
         out.push_str(&inner);
-        out.push_str("output \"");
-        out.push_str(&output.label);
-        out.push('"');
+        out.push_str("output ");
+        emit_quoted(out, &output.label);
         if !output.destinations.is_empty() {
             out.push_str(": ");
             for (i, dest) in output.destinations.iter().enumerate() {
@@ -563,11 +583,7 @@ pub(crate) fn emit_key_value(out: &mut String, kv: &KeyValue, indent: &str) {
 
 fn emit_kv_value_inline(out: &mut String, value: &KvValue) {
     match value {
-        KvValue::Str { value } => {
-            out.push('"');
-            out.push_str(value);
-            out.push('"');
-        }
+        KvValue::Str { value } => emit_quoted(out, value),
         KvValue::Num { value } => out.push_str(&value.to_string()),
         KvValue::PortRef(pr) => emit_port_ref(out, pr),
     }
