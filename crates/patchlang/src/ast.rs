@@ -198,6 +198,41 @@ pub struct IndexSpec {
     pub elements: Vec<IndexElement>,
 }
 
+impl IndexSpec {
+    /// Expand into a flat channel list, in declaration order.
+    ///
+    /// **Never sort and never deduplicate the result.** For a stream's source selection
+    /// the order *is* the wiring — an AES67 receiver maps by position — so `[7, 1, 5, 3]`
+    /// and `[1, 3, 5, 7]` are different flows, and a repeated index is deliberate
+    /// replication of one source onto two receiver positions (#37, D025).
+    ///
+    /// `Auto` carries no channel of its own and is skipped; it is resolved via a side
+    /// table, not in place. A caller that needs to know an `Auto` was present must check
+    /// for it separately — that is exactly why the DRC's F05/auto advisory keeps its own
+    /// `has_auto` flag.
+    ///
+    /// This is the single implementation on purpose. Three near-identical copies of this
+    /// loop had accumulated (graph, canvas load, DRC), each added because the others were
+    /// out of scope or behind a module boundary; an inherent method on the type removes
+    /// the visibility excuse for a fourth.
+    pub fn flatten(&self) -> Vec<u32> {
+        let mut out = Vec::new();
+        for element in &self.elements {
+            match element {
+                IndexElement::Single { value } => out.push(*value),
+                IndexElement::Range { start, end } => out.extend(*start..=*end),
+                IndexElement::Auto => {}
+            }
+        }
+        out
+    }
+
+    /// `flatten` for an optional spec — absent means "no selection", i.e. empty.
+    pub fn flatten_opt(spec: &Option<IndexSpec>) -> Vec<u32> {
+        spec.as_ref().map(IndexSpec::flatten).unwrap_or_default()
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
 #[serde(tag = "type")]

@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use crate::ast::{
-    IndexElement, IndexSpec, InstanceDecl, PatchProgram, PortDef, PortRef, Statement, TemplateDecl,
+    IndexSpec, InstanceDecl, PatchProgram, PortDef, PortRef, Statement, TemplateDecl,
 };
 use crate::builder::LibraryContext;
 use crate::drc::catalog::{self, TagCategory};
@@ -392,22 +392,7 @@ pub fn resolve_port_on_template<'a>(
 /// Expand an IndexSpec into a flat list of channel numbers.
 /// Returns an empty vec for an empty spec.
 pub fn expand_index_spec(spec: &IndexSpec) -> Vec<u32> {
-    let mut result = Vec::new();
-    for elem in &spec.elements {
-        match elem {
-            IndexElement::Single { value } => result.push(*value),
-            IndexElement::Range { start, end } => {
-                for i in *start..=*end {
-                    result.push(i);
-                }
-            }
-            IndexElement::Auto => {
-                // Auto is resolved via side table, not in-place.
-                // DRC callers seeing Auto here should skip the check gracefully.
-            }
-        }
-    }
-    result
+    spec.flatten()
 }
 
 /// Check whether a layer name appears in a connect's suppressions list.

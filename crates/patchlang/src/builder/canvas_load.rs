@@ -760,20 +760,7 @@ fn build_channel_mappings_from_indices(
 /// of one source onto two receiver positions (#37, D025). `Auto` carries no channel
 /// meaning here and is skipped.
 fn expand_index(index: &Option<crate::ast::IndexSpec>) -> Vec<u32> {
-    let Some(spec) = index else { return Vec::new() };
-    let mut channels = Vec::new();
-    for el in &spec.elements {
-        match el {
-            IndexElement::Single { value } => channels.push(*value),
-            IndexElement::Range { start, end } => {
-                for ch in *start..=*end {
-                    channels.push(ch);
-                }
-            }
-            IndexElement::Auto => {}
-        }
-    }
-    channels
+    crate::ast::IndexSpec::flatten_opt(index)
 }
 
 /// Parse explicit mapping string: "1:1", "offset N", or "A->B, C->D, ..."

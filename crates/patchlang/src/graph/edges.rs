@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::ast::{BridgeDecl, BridgeGroupDecl, ConnectDecl, IndexElement, IndexSpec, PortRef};
+use crate::ast::{BridgeDecl, BridgeGroupDecl, ConnectDecl, IndexSpec, PortRef};
 use crate::compat::parse_mapping_spec;
 use crate::compat_types::TsMappingSpec;
 
@@ -14,19 +14,7 @@ use super::types::GraphEdge;
 
 /// Flatten an `IndexSpec` into a list of concrete indices.
 pub(crate) fn flatten_index_spec(spec: &IndexSpec) -> Vec<u32> {
-    let mut result = Vec::new();
-    for el in &spec.elements {
-        match el {
-            IndexElement::Single { value } => result.push(*value),
-            IndexElement::Range { start, end } => {
-                for i in *start..=*end {
-                    result.push(i);
-                }
-            }
-            IndexElement::Auto => {}
-        }
-    }
-    result
+    spec.flatten()
 }
 
 /// Flatten an optional `IndexSpec` into indices. Returns `vec![]` for None.
