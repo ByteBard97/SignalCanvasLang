@@ -32,6 +32,33 @@ fn statement_type_tags_correct() {
     assert_eq!(json["type"], "Use");
 }
 
+/// The `type` key must appear EXACTLY ONCE in the raw serialized text.
+///
+/// Every inner struct carries its own `type_tag` (they are serialized standalone when
+/// nested inside a template), so putting serde's `tag = "type"` on `TsStatement` as well
+/// emitted the key twice — invalid JSON that strict parsers may reject.
+///
+/// This must assert against the raw STRING. `serde_json::to_value` builds a Map, which
+/// silently collapses duplicate keys, so every existing test here passed while the real
+/// output was malformed. That is exactly why this went unnoticed.
+#[test]
+fn statement_serializes_the_type_key_exactly_once() {
+    let stmt = TsStatement::Stream(TsStreamDecl {
+        type_tag: "Stream",
+        name: "Drums".into(),
+        properties: Default::default(),
+        source: None,
+    });
+    let raw = serde_json::to_string(&stmt).unwrap();
+    assert_eq!(
+        raw.matches("\"type\"").count(),
+        1,
+        "`type` must appear once, not duplicated by both the enum tag and the inner field: {raw}"
+    );
+    // and it must still be present and correct
+    assert_eq!(serde_json::to_value(&stmt).unwrap()["type"], "Stream");
+}
+
 // ── Bus label ──────────────────────────────────────────────────────
 
 #[test]

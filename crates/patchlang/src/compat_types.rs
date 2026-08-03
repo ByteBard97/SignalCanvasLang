@@ -15,8 +15,17 @@ pub struct TsProgram {
 }
 
 /// A top-level statement (tagged union via `type` field).
+///
+/// `untagged`, not `tag = "type"`: every variant's inner struct already carries its
+/// own `type_tag` field renamed to `"type"`, because these structs are *also*
+/// serialized standalone — nested inside a template's `instances`/`connects`/`bridges`
+/// they never pass through this enum, so their own tag is the only thing identifying
+/// them. Adding serde's tag on top emitted `"type"` **twice** in every top-level
+/// statement, which is invalid JSON; strict parsers may reject it and lenient ones
+/// silently take the last occurrence. Untagged defers to the inner field, so the key
+/// appears exactly once at every nesting level.
 #[derive(Debug, Clone, Serialize)]
-#[serde(tag = "type")]
+#[serde(untagged)]
 pub enum TsStatement {
     Template(TsTemplateDecl),
     Instance(TsInstanceDecl),
