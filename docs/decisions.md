@@ -781,7 +781,7 @@ This also aligns Rust with the frontend, which already synthesizes `bus.name || 
 
 **Verified:** two legacy-fallback buses on one device emit distinct labels, parse cleanly, and produce **no** duplicate-bus-output-label diagnostic (the DRC's `seen_labels` resets per bus, and the legacy branch emits exactly one output per bus).
 
-**Related:** #34. See also #35 — `formatter_emit` escapes nothing, so a `display_name` containing a quote is silently truncated. That is a separate defect in the same function; this decision does not address it, and a `display_name` with a quote will now reach it via this path.
+**Related:** #34. See also #35 — `formatter_emit` escaped nothing, so a `display_name` containing a quote was silently truncated, and this decision routed such a name into that defect. **#35 is now fixed (D026)**: every quoted-string site, including this legacy bus-output fallback, emits through `emit_quoted`, so a `display_name` with a quote survives the round trip intact.
 
 **Affects:** `builder/canvas_emit/routes.rs`, `builder_tests/canvas_bus_route_tests.rs`, `builder_tests/canvas_test_helpers.rs`.
 
@@ -821,3 +821,30 @@ The frontend is unaffected by the choice: the DTO exposes a flat ordered `source
 **Related:** #37, FrontendV1#42. F02 was fixed alongside as a separate commit — it matched `channels` only as `KvValue::Num` while the canvas emits it via `kv_str`, so the AES67 8-channel limit had never once fired on a canvas-emitted file.
 
 **Affects:** `builder/canvas_input.rs`, `builder/canvas_output.rs`, `builder/canvas_emit/structures.rs`, `builder/canvas_load.rs`, `graph/mod.rs`, `drc/flow.rs`.
+
+### D026 — Escape Sequences in Quoted Strings
+**2026-08-03** | **Decided**
+
+**Question:** `formatter_emit` wrote quoted strings by bare concatenation, so a bus named `The "Big" Mix` emitted `label: "The "Big" Mix"` — text that still *parses* and comes back as `The `. What should the language do about characters that need escaping?
+
+**Decision:** Support escape sequences on both sides. The lexer decodes `\\ \" \n \r \t`; a single `emit_quoted` helper encodes them at every quoted-string site.
+
+**This is a format change, not a local bug fix.** The lexer regex was `"[^"]*"` with no escape support anywhere, so escaping on emit alone would have made things strictly worse — `\"` would terminate the string at the escaped quote. Both sides had to move together, which makes this a change to the language itself, landing after v0.3.3 was already tagged.
+
+**Why it was safe.** Verified before planning: **no backslash appears in any quoted string** in `tests/fixtures/**` or `SignalCanvasFrontend/MTG.patch`. Introducing escape semantics therefore reinterprets nothing that exists. Had a single production file contained a literal backslash, its meaning would have changed silently — and that constraint, not taste, is what made this approach viable.
+
+**Silent corruption is the worst failure mode.** The malformed output parsed "successfully": the lexer closed the string at the second quote and `parse_bus_entry`'s catch-all swallowed the remainder. No diagnostic, no error, just a quietly different bus name. Compare #34 in the same function, which at least failed loudly. That asymmetry is why this was worth a format change.
+
+**Newlines were not the problem the issue assumed.** A raw newline inside quotes already round-tripped with zero errors, because `[^"]*` spans lines. So `\n` is in the escape set for *hygiene*, not correctness: emitting it raw makes a `.patch` file non-line-oriented and breaks diffs. Raw newlines are still accepted on input — files written before escaping existed keep parsing — and are simply re-emitted escaped.
+
+**Unknown escapes are an error.** `\q` produces `unknown escape sequence '\q' in string literal` with a hint listing the valid set. Silently reinterpreting it as `q`, or dropping the backslash, would be the same class of quiet reinterpretation this decision exists to eliminate.
+
+**Encode and decode share one table.** `lexer::ESCAPES` is the single source of truth; the emitter reads it in reverse. Two independent tables would drift, and a drifted pair still passes a naive round-trip test — because escape and unescape being inverse *mistakes* looks identical to their being inverse *correct* functions. Guarded by asserting the emitted text literally, not only the recovered value.
+
+**The proptest nearly wasn't one.** proptest's default string strategy essentially never generates `"` or `\`, so `any::<String>()` would have passed against the *unfixed* code. The generator uses an alphabet deliberately biased toward the hostile characters. A property test that cannot fail against the bug it targets is decoration.
+
+**Known behaviour change:** source containing a lone trailing backslash (`"trailing\"`) previously lexed as the value `trailing\`; it now raises a lex error, since `\"` is consumed as an escape and the literal is unterminated. Unreachable in existing data by the no-backslash finding above.
+
+**Related:** #35, and D024 — whose legacy bus-output fallback routed a user-visible `display_name` straight into this defect. That path is now covered.
+
+**Affects:** `lexer.rs`, `formatter_emit.rs`, `string_escaping_tests.rs`, SPEC.md, `docs/language-reference.md`.

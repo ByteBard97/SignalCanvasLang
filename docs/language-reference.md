@@ -82,9 +82,24 @@ Keywords can be used as property keys but not as names for templates, instances,
 
 ```ebnf
 number         = "0" | ( digit-nonzero { digit } ) ;
-string-literal = '"' { any-char-except-quote } '"' ;
+string-literal = '"' { string-char } '"' ;
+string-char     = ? any character except '"' and '\' ? | escape-sequence ;
+escape-sequence = '\' ( '"' | '\' | 'n' | 'r' | 't' ) ;
 digit-nonzero  = "1".."9" ;
 ```
+
+A quoted string may contain any character. `"` and `\` **must** be escaped; `\n`, `\r`
+and `\t` are also recognised. Any other escape (e.g. `\q`) is a lex error rather than
+being silently reinterpreted.
+
+The formatter always escapes on the way out, so a user-supplied value like a bus named
+`The "Big" Mix` survives a format → parse round trip intact. Before this existed, such a
+value was silently truncated to `The ` — the emitted text still parsed, just with a
+different value. See D026.
+
+A raw newline inside quotes is still accepted, so files written before escaping existed
+keep parsing; it is simply re-emitted as `\n` to keep `.patch` files line-oriented.
+
 
 ### Punctuation
 
