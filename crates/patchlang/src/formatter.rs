@@ -3,7 +3,7 @@
 //! Parses PatchLang source, walks the AST, and emits a consistently
 //! formatted version. Comments are NOT preserved (lexer discards them).
 //!
-//! Individual statement emitters live in `formatter_emit.rs`.
+//! Individual statement emitters live in the `formatter_emit` module tree.
 
 use crate::ast::*;
 use crate::formatter_emit;
