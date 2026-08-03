@@ -145,7 +145,15 @@ fn emit_port_def(out: &mut String, port: &PortDef, indent: &str) {
             }
             out.push_str(&kv.key);
             out.push_str(": ");
-            emit_kv_value_inline(out, &kv.value);
+            // A named attribute's value is a bare identifier, NOT a quoted string:
+            // `attribute = identifier [ ":" identifier ]` (SPEC §port-def). The parser
+            // reads an identifier here and stores it as `KvValue::Str`, so routing this
+            // through `emit_kv_value_inline` quoted it and produced `[split: "direct"]`
+            // — which our own parser then rejects. Emit the value bare.
+            match &kv.value {
+                KvValue::Str { value } => out.push_str(value),
+                other => emit_kv_value_inline(out, other),
+            }
             first = false;
         }
         out.push(']');
