@@ -225,6 +225,36 @@ connect Mixer.Out[1] -> Mixer.In[1] {
         );
     }
 
+    /// An unterminated literal must say so, and blame only the opening quote.
+    ///
+    /// logos consumes from the opening `"` to end-of-input hunting for a close, so the
+    /// error span covers the whole remainder of the file. Reported as "unexpected
+    /// character" that dumped the rest of the source into the message and highlighted
+    /// all of it — useless on a real file. The reachable way to hit this is a trailing
+    /// backslash, which escapes the closing quote (D026's known behaviour change).
+    #[test]
+    fn unterminated_string_is_named_and_blames_only_the_quote() {
+        let src = "template Desk { meta { model: \"trailing\\\" } }";
+        let result = parse(src);
+        assert!(!result.is_valid(), "an unterminated literal must not parse");
+        let err = result
+            .errors
+            .iter()
+            .find(|e| e.message.contains("unterminated string literal"))
+            .unwrap_or_else(|| panic!("expected an unterminated-string error: {:?}", result.errors));
+        assert_eq!(
+            err.span.end - err.span.start,
+            1,
+            "the span must cover only the opening quote, not the rest of the file: {err:?}"
+        );
+        assert_eq!(&src[err.span.start..err.span.end], "\"");
+        assert!(
+            !err.message.contains("trailing"),
+            "the message must not quote the source back: {}",
+            err.message
+        );
+    }
+
     #[test]
     fn every_supported_escape_decodes() {
         let result = parse(r#"template Desk { meta { model: "\\ \" \n \r \t" } }"#);

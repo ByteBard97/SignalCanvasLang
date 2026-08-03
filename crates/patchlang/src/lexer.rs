@@ -180,11 +180,27 @@ pub fn tokenize(source: &str) -> (Vec<SpannedToken>, Vec<crate::error::ParseErro
     let mut lexer = Token::lexer(source);
 
     while let Some(result) = lexer.next() {
-        let span = lexer.span();
+        let mut span = lexer.span();
         match result {
             Ok(token) => tokens.push(SpannedToken { token, span }),
             Err(err) => {
                 let (message, hint) = match err {
+                    // An error span that opens with `"` is an unterminated string
+                    // literal, not a stray character: logos consumed from the opening
+                    // quote to end-of-input looking for a close. Reporting it as
+                    // "unexpected character" quoted the entire remainder of the file
+                    // into the message and pointed the span at all of it. Name the real
+                    // problem and blame only the opening quote.
+                    LexError::UnexpectedCharacter if source[span.clone()].starts_with('"') => {
+                        span = span.start..span.start + 1;
+                        (
+                            "unterminated string literal".to_string(),
+                            Some(
+                                r#"add a closing '"'. To include a quote in the text, escape it as \" — and note a trailing \ escapes the closing quote"#
+                                    .to_string(),
+                            ),
+                        )
+                    }
                     LexError::UnexpectedCharacter => (
                         format!("unexpected character '{}'", &source[span.clone()]),
                         None,
