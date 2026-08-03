@@ -15,8 +15,11 @@ pub enum LexError {
 }
 
 /// The escape sequences a quoted string may contain, as (source char, decoded char).
-/// Kept next to `formatter_emit::emit_quoted`, which must escape exactly this set.
-const ESCAPES: [(char, char); 5] = [
+///
+/// The single source of truth for the escape set: this module reads it left-to-right
+/// to decode, and `formatter_emit::emit_quoted` reads it right-to-left to encode, so
+/// the two are inverse by construction rather than by inspection.
+pub(crate) const ESCAPES: [(char, char); 5] = [
     ('\\', '\\'),
     ('"', '"'),
     ('n', '\n'),

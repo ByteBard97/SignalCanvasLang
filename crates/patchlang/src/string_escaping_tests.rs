@@ -9,13 +9,15 @@
 mod tests {
     use proptest::prelude::*;
 
-    use crate::ast::{KvValue, Statement};
+    use crate::ast::{KvValue, ParamValue, Statement};
     use crate::formatter::format_program;
     use crate::parser::parse;
 
-    /// Source with one string-bearing site of each kind we care about. Each value
-    /// is a placeholder that the helpers below overwrite with the string under test.
-    const CARRIER: &str = r#"template Desk {
+    /// Source exercising all nine quoted-emission sites in `formatter_emit`: template
+    /// `@version` and string param default, `meta` value, `config` label, slot card
+    /// name, bus label, bus output label, instance `@version`, and connect `mapping`.
+    /// Each value is a placeholder the helper below overwrites with the string under test.
+    const CARRIER: &str = r#"template Desk(name: "placeholder") @version("1.0") {
   meta {
     model: "placeholder"
   }
@@ -23,11 +25,15 @@ mod tests {
 config Labels {
   label Desk.In[1]: "placeholder"
 }
-instance Mixer is Desk {
+instance Mixer is Desk @version(">=1.0") {
+  slot Card[1]: "placeholder"
   bus PQMM {
     label: "placeholder"
     output "placeholder"
   }
+}
+connect Mixer.Out[1] -> Mixer.In[1] {
+  mapping: "placeholder"
 }"#;
 
     /// The language rejects an empty bus output label, so that one site carries the
@@ -52,12 +58,19 @@ instance Mixer is Desk {
                     t.meta[0].value = KvValue::Str {
                         value: value.to_string(),
                     };
+                    t.params[0].default_value = ParamValue::Str {
+                        value: value.to_string(),
+                    };
+                    t.version = Some(value.to_string());
                 }
                 Statement::Config(c) => c.labels[0].label = value.to_string(),
                 Statement::Instance(i) => {
                     i.buses[0].label = Some(value.to_string());
                     i.buses[0].outputs[0].label = format!("{OUTPUT_PREFIX}{value}");
+                    i.slot_assignments[0].card_name = value.to_string();
+                    i.version_constraint = Some(value.to_string());
                 }
+                Statement::Connect(c) => c.mapping = Some(value.to_string()),
                 _ => panic!("unexpected statement in carrier source"),
             }
         }
@@ -73,11 +86,21 @@ instance Mixer is Desk {
         let mut read_back = Vec::new();
         for stmt in &result.program.statements {
             match stmt {
-                Statement::Template(t) => match &t.meta[0].value {
-                    KvValue::Str { value } => read_back.push(value.clone()),
-                    other => panic!("meta value came back as {other:?}, not a string"),
-                },
+                Statement::Template(t) => {
+                    match &t.meta[0].value {
+                        KvValue::Str { value } => read_back.push(value.clone()),
+                        other => panic!("meta value came back as {other:?}, not a string"),
+                    }
+                    match &t.params[0].default_value {
+                        ParamValue::Str { value } => read_back.push(value.clone()),
+                        other => panic!("param default came back as {other:?}, not a string"),
+                    }
+                    read_back.push(t.version.clone().unwrap_or_default());
+                }
                 Statement::Config(c) => read_back.push(c.labels[0].label.clone()),
+                Statement::Connect(c) => {
+                    read_back.push(c.mapping.clone().unwrap_or_default());
+                }
                 Statement::Instance(i) => {
                     read_back.push(i.buses[0].label.clone().unwrap_or_default());
                     let output_label = &i.buses[0].outputs[0].label;
@@ -87,6 +110,8 @@ instance Mixer is Desk {
                             .unwrap_or(output_label)
                             .to_string(),
                     );
+                    read_back.push(i.slot_assignments[0].card_name.clone());
+                    read_back.push(i.version_constraint.clone().unwrap_or_default());
                 }
                 _ => panic!("unexpected statement in formatted output"),
             }
@@ -97,7 +122,7 @@ instance Mixer is Desk {
     /// Assert `value` survives every site unchanged.
     fn assert_survives(value: &str) {
         let (formatted, read_back) = roundtrip(value);
-        assert_eq!(read_back.len(), 4, "expected four string sites");
+        assert_eq!(read_back.len(), 9, "expected every string site to report back");
         for got in &read_back {
             assert_eq!(
                 got, value,

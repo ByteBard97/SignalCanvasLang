@@ -10,22 +10,21 @@ pub(crate) const INDENT: &str = "  ";
 /// Write `s` as a quoted PatchLang string literal, escaping it so the lexer reads
 /// back exactly the same value (#35).
 ///
-/// The escape set must match `lexer::ESCAPES`. Backslash and quote are correctness —
-/// without them a value like `The "Big" Mix` is silently truncated on re-parse.
-/// Newline, carriage return and tab are hygiene: they survive unescaped, but emitting
-/// them raw makes a `.patch` file non-line-oriented.
+/// Encodes exactly the set the lexer decodes, by reading `lexer::ESCAPES` in reverse.
+/// Backslash and quote are correctness — without them a value like `The "Big" Mix` is
+/// silently truncated on re-parse. Newline, carriage return and tab are hygiene: they
+/// survive unescaped, but emitting them raw makes a `.patch` file non-line-oriented.
 ///
 /// Every quoted emission in this file must go through here.
 fn emit_quoted(out: &mut String, s: &str) {
     out.push('"');
     for c in s.chars() {
-        match c {
-            '\\' => out.push_str(r"\\"),
-            '"' => out.push_str("\\\""),
-            '\n' => out.push_str(r"\n"),
-            '\r' => out.push_str(r"\r"),
-            '\t' => out.push_str(r"\t"),
-            _ => out.push(c),
+        match crate::lexer::ESCAPES.iter().find(|(_, decoded)| *decoded == c) {
+            Some((source, _)) => {
+                out.push('\\');
+                out.push(*source);
+            }
+            None => out.push(c),
         }
     }
     out.push('"');
