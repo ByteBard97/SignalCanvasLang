@@ -59,6 +59,8 @@ mod graph_tests;
 mod graph_drill_consistency_tests;
 #[cfg(test)]
 mod contract_tests;
+#[cfg(test)]
+mod string_escaping_tests;
 
 pub use ast::PatchProgram;
 pub use compat::{parse_mapping_spec, to_ts_program, to_ts_result, to_ts_result_with_resolutions};
