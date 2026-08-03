@@ -5,6 +5,11 @@
 //!   2. The emitted PatchLang text parses without errors.
 //!   3. `load_from_patch(emit_from_canvas_input(input))` preserves instance count.
 //!   4. A second emit produces identical text (idempotency).
+//!
+//! An emit or load failure FAILS these properties. They previously bailed out with
+//! `else { return Ok(()) }`, so a regression that made emit fail on every input would
+//! have turned this whole file green — the same "a check that cannot fail reports
+//! success forever" shape as #36 and the console.assert WASM suite.
 
 use patchlang::builder::{emit_from_canvas_input, load_from_patch};
 use patchlang::builder::canvas_input::*;
@@ -55,8 +60,30 @@ fn make_instance(i: usize) -> InstanceEmitInput {
         route_rules: vec![],
         instance_routes: vec![],
         internal_buses: vec![],
-        tx_streams: vec![],
-        rx_streams: vec![],
+        // Streams were previously always empty here, so the idempotency property —
+        // the strongest one in this file — had never once exercised a stream, let
+        // alone a channel selection (#37). A generator that cannot reach the risky
+        // construct cannot catch a regression in it.
+        //
+        // The selections are deliberately hostile: non-monotonic, and one with a
+        // repeated index. Order is the wiring for AES67 and a repeat is legitimate
+        // replication (D025), so a sort or a dedup anywhere in the round trip is a
+        // corruption this must surface.
+        tx_streams: vec![StreamEmitInput {
+            // The quote exercises #35/D026 through the canvas path specifically.
+            label: format!("Drums \"{i}\" TX"),
+            protocol: "AES67".to_string(),
+            channel_count: 4,
+            interface_id: format!("iface_out_{i}"),
+            source_channels: vec![7, 1, 5, 3],
+        }],
+        rx_streams: vec![StreamEmitInput {
+            label: format!("Return {i}"),
+            protocol: "AES67".to_string(),
+            channel_count: 3,
+            interface_id: format!("iface_in_{i}"),
+            source_channels: vec![2, 2, 8],
+        }],
         is_ring_container: false,
         ring_protocol: None,
         ring_members: vec![],
@@ -300,7 +327,8 @@ proptest! {
     #[test]
     fn prop_emitted_patch_parses_cleanly(n in 1usize..=6usize) {
         let input = make_canvas_input(n);
-        let Ok(patch) = emit_from_canvas_input(input) else { return Ok(()); };
+        let patch = emit_from_canvas_input(input)
+            .map_err(|e| TestCaseError::fail(format!("emit failed: {e:?}")))?;
         let parse_result = patchlang::parser::parse(&patch);
         prop_assert!(
             parse_result.errors.is_empty(),
@@ -314,8 +342,10 @@ proptest! {
     fn prop_load_preserves_instance_count(n in 1usize..=6usize) {
         let input = make_canvas_input(n);
         let input_count = input.instances.len();
-        let Ok(patch) = emit_from_canvas_input(input) else { return Ok(()); };
-        let Ok(output) = load_from_patch(&patch, "{}") else { return Ok(()); };
+        let patch = emit_from_canvas_input(input)
+            .map_err(|e| TestCaseError::fail(format!("emit failed: {e:?}")))?;
+        let output = load_from_patch(&patch, "{}")
+            .map_err(|e| TestCaseError::fail(format!("load failed: {e:?}\n---\n{patch}")))?;
         prop_assert_eq!(
             output.instances.len(), input_count,
             "instance count changed: expected {} got {}\n---\n{}", input_count, output.instances.len(), patch
@@ -326,10 +356,13 @@ proptest! {
     #[test]
     fn prop_emit_is_idempotent(n in 1usize..=5usize) {
         let input = make_canvas_input(n);
-        let Ok(first_patch) = emit_from_canvas_input(input) else { return Ok(()); };
-        let Ok(loaded) = load_from_patch(&first_patch, "{}") else { return Ok(()); };
+        let first_patch = emit_from_canvas_input(input)
+            .map_err(|e| TestCaseError::fail(format!("first emit failed: {e:?}")))?;
+        let loaded = load_from_patch(&first_patch, "{}")
+            .map_err(|e| TestCaseError::fail(format!("load failed: {e:?}\n---\n{first_patch}")))?;
         let second_input = rebuild_input_from_load(&loaded);
-        let Ok(second_patch) = emit_from_canvas_input(second_input) else { return Ok(()); };
+        let second_patch = emit_from_canvas_input(second_input)
+            .map_err(|e| TestCaseError::fail(format!("second emit failed: {e:?}")))?;
         prop_assert_eq!(first_patch, second_patch, "emit is not idempotent after load");
     }
 
@@ -338,8 +371,10 @@ proptest! {
     fn prop_connections_survive_roundtrip(n in 2usize..=6usize) {
         let input = make_canvas_input(n);
         let expected_conn_count = input.connections.len();
-        let Ok(patch) = emit_from_canvas_input(input) else { return Ok(()); };
-        let Ok(output) = load_from_patch(&patch, "{}") else { return Ok(()); };
+        let patch = emit_from_canvas_input(input)
+            .map_err(|e| TestCaseError::fail(format!("emit failed: {e:?}")))?;
+        let output = load_from_patch(&patch, "{}")
+            .map_err(|e| TestCaseError::fail(format!("load failed: {e:?}\n---\n{patch}")))?;
         prop_assert_eq!(
             output.connections.len(), expected_conn_count,
             "connection count changed: expected {} got {}", expected_conn_count, output.connections.len()
