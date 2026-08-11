@@ -15,6 +15,12 @@ use crate::builder::error::BuilderError;
 use crate::builder::insert_endpoints::{parse_insert_list, InsertEndpoint};
 use crate::parser::parse;
 
+/// A stream this device transmits. Also the default when `direction` is absent (#38):
+/// a stream is definitionally a transmit construct, so an undirected one is a TX.
+pub(crate) const STREAM_DIRECTION_TX: &str = "tx";
+/// A flow this device is subscribed to receive. Must be stated explicitly.
+pub(crate) const STREAM_DIRECTION_RX: &str = "rx";
+
 /// Parse PatchLang source text and return a canvas-ready bundle.
 ///
 /// The `_layout_json` parameter is reserved for future sidecar integration;
@@ -183,9 +189,23 @@ pub fn load_from_patch(patch_source: &str, _layout_json: &str) -> Result<CanvasL
                 KvValue::Str { value } => value.parse().ok(),
                 _ => None,
             }).unwrap_or(0);
+        // A stream with no `direction` is a TRANSMIT stream (#38).
+        //
+        // Not a convention guess: in both Dante and AES67 a flow is created and
+        // advertised by the talker, and a receiver only ever *subscribes* to someone
+        // else's flow. So `stream { source: ... }` is definitionally a transmit, and
+        // `rx` is the explicit marker for "a flow this device is subscribed to".
+        //
+        // This was `unwrap_or_default()`, yielding `""`, while the tx/rx split matched
+        // `== "tx"` / `== "rx"` exactly — so an undirected stream landed in neither
+        // bucket and was dropped with no diagnostic. Half the streams in the production
+        // MTG.patch vanished on load, and the next save wrote them out of existence.
+        // The default is applied here rather than at the split so the value reported
+        // back to the canvas is `tx`, not an empty string that means the same thing.
         let direction = stream.properties.iter().find(|kv| kv.key == "direction")
             .and_then(|kv| if let KvValue::Str { value } = &kv.value { Some(value.clone()) } else { None })
-            .unwrap_or_default();
+            .filter(|d| !d.trim().is_empty())
+            .unwrap_or_else(|| STREAM_DIRECTION_TX.to_string());
         stream_map.entry(inst_name.clone()).or_default().push(StreamOutput {
             label: stream.name.clone(),
             protocol,
@@ -420,12 +440,15 @@ pub fn load_from_patch(patch_source: &str, _layout_json: &str) -> Result<CanvasL
 
         // Streams for this instance
         let all_streams: Vec<StreamOutput> = stream_map.remove(&inst.name).unwrap_or_default();
+        // Every stream carries a concrete direction by the time it reaches here — the
+        // default is applied on read — so these two filters are exhaustive and nothing
+        // can fall between them, which is exactly how #38 lost streams.
         let tx_streams: Vec<StreamOutput> = all_streams.iter()
-            .filter(|s| s.direction == "tx")
+            .filter(|s| s.direction == STREAM_DIRECTION_TX)
             .cloned()
             .collect();
         let rx_streams: Vec<StreamOutput> = all_streams.iter()
-            .filter(|s| s.direction == "rx")
+            .filter(|s| s.direction == STREAM_DIRECTION_RX)
             .cloned()
             .collect();
 

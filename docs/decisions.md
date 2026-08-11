@@ -848,3 +848,28 @@ The frontend is unaffected by the choice: the DTO exposes a flat ordered `source
 **Related:** #35, and D024 — whose legacy bus-output fallback routed a user-visible `display_name` straight into this defect. That path is now covered.
 
 **Affects:** `lexer.rs`, `formatter_emit.rs`, `string_escaping_tests.rs`, SPEC.md, `docs/language-reference.md`.
+
+### D027 — A Stream Is a Transmit Construct; Undirected Means TX
+**2026-08-11** | **Decided** (spec call by Reid on #38)
+
+**Question:** `canvas_load` bucketed streams with `direction == "tx"` / `== "rx"` exact matches, and `direction` was read with `unwrap_or_default()`. A stream with no `direction` property therefore matched neither bucket and was **discarded with no diagnostic** — half the streams in the production `MTG.patch` (`COMMSQSYS`, `to_Comms`) vanished on load, and any save afterwards wrote them out of existence. `direction` appeared nowhere in SPEC.md or the language reference, so the correct default was genuinely unspecified.
+
+**Decision:** `direction` defaults to `tx`. A stream is a transmit construct by definition, not by convention.
+
+**Why this is definitional rather than a convention guess.** In both Dante and AES67 a flow is created and advertised by the **talker** — "I am sending these N channels as flow X." A receiver never originates a flow; it makes a *subscription* to someone else's. There is no such thing as a receive stream in the protocol sense, so a bare `stream { source: ... }` **is** a TX stream.
+
+`rx_streams` is therefore not a second kind of stream. It is SignalCanvas documenting the subscription side — "this device is subscribed to flow X" — and `direction` is the tag separating "a flow I transmit" from "a flow I receive".
+
+**Rejected: a third undirected bucket.** It would model a state that cannot exist.
+
+**The default is applied on read, not at the split**, so the value reported back to the canvas is `tx` rather than an empty string meaning the same thing. The two filters are then exhaustive, which is what makes the silent drop unrepresentable rather than merely unlikely.
+
+**A diagnostic accompanies the default (F06, Info).** The default fixes the data loss; the advisory keeps the assumption visible so a genuinely malformed file is loud rather than quietly reinterpreted. Info, not Warning: the behaviour is well-defined, not a fault.
+
+**Verified on the file that motivated the issue.** Before: `MTG.patch` declared 4 streams and 2 survived a load. After, through the rebuilt WASM: all 4 survive, 0 dropped.
+
+**Three existing DRC tests had to be re-scoped.** They asserted `diags.is_empty()` on fixtures that omit `direction` — which is what every real file looks like — so a newly-added legitimate rule broke them even though the rule under test stayed silent. They now assert about the rule they actually test. Worth remembering: `is_empty()` on a diagnostic list is an assertion about every rule that will ever exist.
+
+**Related:** #38. The silent drop was found by an end-to-end WASM check during #37; 912 unit tests never saw it, because every fixture set `direction` explicitly.
+
+**Affects:** `builder/canvas_load.rs`, `drc/flow.rs`, SPEC.md, `docs/language-reference.md`.

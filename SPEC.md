@@ -346,6 +346,17 @@ stream Drums_AES67 {
 }
 ```
 
+A `stream` is a **transmit** construct. In both Dante and AES67 a flow is created and
+advertised by the *talker*; a receiver never originates a flow, it only subscribes to
+someone else's. So `direction` **defaults to `tx`** when absent — an undirected
+`stream { source: ... }` is a transmit by definition, not by convention.
+
+`direction: "rx"` is the explicit marker for a flow this device is *subscribed to
+receive*, which SignalCanvas documents on the receiving device. There is no third,
+undirected state. Loading a stream with no `direction` emits the F06 advisory naming
+what it was treated as. See D027.
+
+
 ```
 signal Lead_Vocal {
   origin: Stage_Left.Mic_In[1]

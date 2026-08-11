@@ -1,4 +1,4 @@
-//! Flow DRC checks — rules F01–F05.
+//! Flow DRC checks — rules F01–F06.
 //!
 //! AES67 interoperability diagnostics:
 //! - F01: Flow slot exhaustion (stream count vs chipset limit)
@@ -6,6 +6,7 @@
 //! - F03: Multicast prefix mismatch between AES67 devices
 //! - F04: `channels` disagrees with the source channel selection length
 //! - F05: The same source channel appears at more than one position in a flow
+//! - F06: A stream declares no `direction` and is being treated as transmit
 
 use std::collections::{HashMap, HashSet};
 
@@ -25,6 +26,7 @@ pub fn check(program: &PatchProgram, ctx: &DRCContext<'_>) -> Vec<Diagnostic> {
     check_channel_count_mismatch(program, &mut diags);
     check_duplicate_source_channels(program, &mut diags);
     check_auto_in_stream_source(program, &mut diags);
+    check_missing_stream_direction(program, &mut diags);
     diags
 }
 
@@ -388,4 +390,49 @@ fn get_num_property(properties: &[crate::ast::KeyValue], key: &str) -> Option<u3
             None
         }
     })
+}
+
+/// F06 — A stream declares no `direction`, so it is treated as transmit.
+///
+/// Info, not a warning: this is well-defined, not a fault. A stream is a *transmit*
+/// construct — in both Dante and AES67 a flow is created and advertised by the talker,
+/// and a receiver only ever subscribes to someone else's flow — so an undirected
+/// `stream { source: ... }` is a TX by definition (#38).
+///
+/// The diagnostic exists because that default was previously a silent DROP: the loader
+/// matched `"tx"`/`"rx"` exactly, so an undirected stream fell in neither bucket and
+/// disappeared, taking half the streams in the production MTG.patch with it. The default
+/// fixes the loss; this makes the assumption visible so a genuinely malformed file is
+/// loud rather than quietly reinterpreted.
+fn check_missing_stream_direction(program: &PatchProgram, diags: &mut Vec<Diagnostic>) {
+    for stmt in &program.statements {
+        let Statement::Stream(stream) = stmt else {
+            continue;
+        };
+        let declared = stream.properties.iter().find(|kv| kv.key == "direction").and_then(|kv| {
+            if let KvValue::Str { value } = &kv.value {
+                Some(value.trim())
+            } else {
+                None
+            }
+        });
+        if declared.is_some_and(|d| !d.is_empty()) {
+            continue;
+        }
+        diags.push(Diagnostic {
+            severity: Severity::Info,
+            layer: LAYER.clone(),
+            message: format!(
+                "Stream '{}' declares no direction; treating as tx (a stream is a transmit construct).",
+                stream.name
+            ),
+            span: Some(stream.span.clone()),
+            source: None,
+            target: None,
+            fix: Some(format!(
+                "Add direction: \"tx\" to '{}' to state it explicitly, or direction: \"rx\" if it documents a flow this device receives",
+                stream.name
+            )),
+        });
+    }
 }

@@ -66,6 +66,82 @@ fn load_preserves_non_monotonic_selection_order() {
     );
 }
 
+// ---------------------------------------------------------------------------
+// Direction defaulting (#38)
+// ---------------------------------------------------------------------------
+
+/// A stream with no `direction` must load as TX, not vanish.
+///
+/// `direction` was read with `unwrap_or_default()` and the tx/rx split matched
+/// `== "tx"` / `== "rx"` exactly, so an undirected stream fell in neither bucket and
+/// was dropped with no diagnostic. Half the streams in the production `MTG.patch`
+/// (`COMMSQSYS`, `to_Comms`) disappeared on load, and any save afterwards wrote them
+/// out of existence.
+///
+/// Reid's spec call on #38: a stream is definitionally a *transmit* construct — in
+/// both Dante and AES67 a flow is created and advertised by the talker, and a receiver
+/// merely subscribes. So an undirected `stream { source: ... }` IS a TX stream, and
+/// defaulting to `tx` recovers those streams rather than guessing at a convention.
+#[test]
+fn stream_without_direction_loads_as_tx() {
+    let patch = r#"
+template Core_250i {
+  meta { manufacturer: "QSC", model: "Core 250i" }
+  ports { AES67_Out[1..64]: out(etherCON) [AES67] }
+}
+instance DSP is Core_250i
+
+stream COMMSQSYS {
+  source: DSP.AES67_Out
+  channels: 8
+  protocol: "AES67"
+}
+"#;
+    let loaded = load_from_patch(patch, "").expect("load must succeed");
+    let inst = loaded
+        .instances
+        .iter()
+        .find(|i| i.name == "DSP")
+        .expect("instance DSP must load");
+    assert_eq!(
+        inst.tx_streams.len(),
+        1,
+        "an undirected stream must load as TX, not be silently dropped"
+    );
+    assert_eq!(inst.tx_streams[0].label, "COMMSQSYS");
+    assert_eq!(
+        inst.tx_streams[0].direction, "tx",
+        "the defaulted direction must be reported as tx, not left empty"
+    );
+    assert!(
+        inst.rx_streams.is_empty(),
+        "defaulting must not also file it as a receive stream"
+    );
+}
+
+/// An explicit `direction: "rx"` still means a subscribed/received flow.
+#[test]
+fn explicit_rx_direction_is_preserved() {
+    let patch = r#"
+template Core_250i {
+  meta { manufacturer: "QSC", model: "Core 250i" }
+  ports { AES67_In[1..64]: in(etherCON) [AES67] }
+}
+instance DSP is Core_250i
+
+stream QSYSCOMMS {
+  source: DSP.AES67_In
+  channels: 8
+  direction: "rx"
+  protocol: "AES67"
+}
+"#;
+    let loaded = load_from_patch(patch, "").expect("load must succeed");
+    let inst = &loaded.instances[0];
+    assert_eq!(inst.rx_streams.len(), 1, "explicit rx must stay rx");
+    assert!(inst.tx_streams.is_empty(), "rx must not be defaulted into tx");
+}
+
 /// A repeated index is legitimate replication — one mono source landing on two
 /// receiver positions (the same reason F05 is an Info phrased as a question, not a
 /// fault) — so it must survive load intact.

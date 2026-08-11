@@ -62,6 +62,19 @@ mod flow {
         drc::run_all(&result.program, &LibraryContext::empty())
     }
 
+    /// Flow diagnostics excluding F06, the "no direction, treating as tx" advisory.
+    ///
+    /// These fixtures omit `direction` because that is what every real file looks like,
+    /// so F06 fires on all of them. Asserting `is_empty()` against the raw list made
+    /// these tests brittle: any newly-added legitimate rule broke them even though the
+    /// rule under test was silent. Assert about the rule you are testing.
+    fn flow_diags_excluding_direction_advisory(source: &str) -> Vec<crate::drc::Diagnostic> {
+        flow_diags(source)
+            .into_iter()
+            .filter(|d| !d.message.contains("declares no direction"))
+            .collect()
+    }
+
     fn flow_diags(source: &str) -> Vec<crate::drc::Diagnostic> {
         check(source)
             .into_iter()
@@ -186,7 +199,7 @@ mod flow {
     /// bogus "declares 0 channels but its source selects 2".
     #[test]
     fn f04_unparseable_channels_with_a_selection_does_not_warn() {
-        let diags = flow_diags(r#"
+        let diags = flow_diags_excluding_direction_advisory(r#"
             template Dev { ports { Out[1..16]: out(etherCON) [Dante] } }
             instance D is Dev
             stream Odd { source: D.Out[1, 3] channels: "many" protocol: "AES67" }
@@ -281,12 +294,49 @@ mod flow {
     fn f04_no_selection_no_warning() {
         // Every stream in every existing file looks like this: a channel count and
         // no index. F04 must stay silent, or it would fire on the whole corpus.
-        let diags = flow_diags(r#"
+        let diags = flow_diags_excluding_direction_advisory(r#"
             template Dev { ports { Out[1..8]: out(etherCON) [Dante] } }
             instance D is Dev
             stream S { source: D.Out channels: "8" protocol: "AES67" }
         "#);
         assert!(diags.is_empty(), "a plain 8-channel stream should be clean: {:?}", diags);
+    }
+
+    // --- F06: a stream that declares no direction ---
+
+    #[test]
+    fn f06_missing_direction_is_an_info_naming_the_stream() {
+        let diags = flow_diags(r#"
+            template Dev { ports { Out[1..8]: out(etherCON) [Dante] } }
+            instance D is Dev
+            stream COMMSQSYS { source: D.Out channels: "8" protocol: "AES67" }
+        "#);
+        let d = diags
+            .iter()
+            .find(|d| d.message.contains("declares no direction"))
+            .unwrap_or_else(|| panic!("expected the F06 advisory: {diags:?}"));
+        assert_eq!(
+            d.severity,
+            Severity::Info,
+            "defaulting is well-defined, not a fault — Info, not Warning"
+        );
+        assert!(d.message.contains("COMMSQSYS"), "must name the stream: {}", d.message);
+        assert!(d.message.contains("tx"), "must say what it is treated as: {}", d.message);
+    }
+
+    #[test]
+    fn f06_silent_when_direction_is_explicit() {
+        for dir in ["tx", "rx"] {
+            let diags = flow_diags(&format!(r#"
+                template Dev {{ ports {{ Out[1..8]: out(etherCON) [Dante] }} }}
+                instance D is Dev
+                stream S {{ source: D.Out channels: "8" direction: "{dir}" protocol: "AES67" }}
+            "#));
+            assert!(
+                !diags.iter().any(|d| d.message.contains("declares no direction")),
+                "an explicit direction: \"{dir}\" must not trip F06: {diags:?}"
+            );
+        }
     }
 
     // --- F05: a source channel repeated at more than one position ---
@@ -317,7 +367,7 @@ mod flow {
     #[test]
     fn f05_non_monotonic_unique_selection_no_diagnostic() {
         // Order is user intent and is preserved; only repeats are remarked on.
-        let diags = flow_diags(r#"
+        let diags = flow_diags_excluding_direction_advisory(r#"
             template Dev { ports { Out[1..8]: out(etherCON) [Dante] } }
             instance D is Dev
             stream Shuffled { source: D.Out[7, 1, 5, 3] channels: 4 protocol: "AES67" }

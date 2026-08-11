@@ -496,6 +496,17 @@ flag Genlock_OK {
 }
 ```
 
+A `stream` is a **transmit** construct. In both Dante and AES67 a flow is created and
+advertised by the *talker*; a receiver never originates a flow, it only subscribes to
+someone else's. So `direction` **defaults to `tx`** when absent — an undirected
+`stream { source: ... }` is a transmit by definition, not by convention.
+
+`direction: "rx"` is the explicit marker for a flow this device is *subscribed to
+receive*, which SignalCanvas documents on the receiving device. There is no third,
+undirected state. Loading a stream with no `direction` emits the F06 advisory naming
+what it was treated as. See D027.
+
+
 ### Config Declaration
 
 Per-instance channel labels and metadata.
@@ -918,6 +929,7 @@ The compiler runs DRC checks after parsing and auto-resolution. Diagnostics have
 | F02 | Flow | Info | AES67 stream exceeds 8 channels — hardware auto-splits into multiple flows |
 | F04 | Flow | Warning | `channels` disagrees with the source channel selection length |
 | F05 | Flow | Info | The same source channel appears at more than one position in a flow — replication, or a mistake? |
+| F06 | Flow | Info | A stream declares no `direction`; treated as `tx` (a stream is a transmit construct) |
 | F03 | Flow | Error | Multicast prefix mismatch between AES67 devices — silent audio failure |
 | C01 | Convention | Info | Orphaned device (no connections, bridges, rings, or config) |
 | C02 | Convention | Warning | Duplicate connection (same source-target pair) |
