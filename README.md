@@ -38,10 +38,7 @@ bridge Stage_Left.Mic_In[1..32] -> FOH_Console.Dante_Ch[1..32]
 
 ## Why PatchLang?
 
-- **Human-readable** — a 32-channel stagebox is 10 lines, not 200 lines of JSON
-- **Git-diffable** — adding a mic input is a one-line diff
-- **LLM-friendly** — language models can generate valid `.patch` files from plain English
-- **Domain-specific** — models broadcast concepts (ports, connectors, protocols, signal chains) directly
+A 32-channel stagebox is 10 lines instead of 200 lines of JSON, and it's readable without a schema. Adding a mic input is a one-line diff, so patch files work fine in a normal git workflow. The syntax also happens to be easy for an LLM to generate correctly from plain English, since it models broadcast concepts (ports, connectors, protocols, signal chains) directly instead of forcing them into generic key/value structures.
 
 ## Language Specification
 
@@ -79,8 +76,8 @@ echo 'instance FOH is CL5' | patchlang
 ```
 
 This produces two packages:
-- `pkg-node/` — Node.js target
-- `pkg-web/` — browser bundler target (Vite, webpack, etc.)
+- `pkg-node/`: Node.js target
+- `pkg-web/`: browser bundler target (Vite, webpack, etc.)
 
 ```javascript
 import { parse, validate } from './pkg-web/patchlang_wasm.js'
@@ -129,15 +126,13 @@ SignalCanvasLang/
 
 ## Architecture
 
-The parser is a hand-written recursive descent parser using [Logos](https://github.com/logos-rs/logos) for lexing. No parser generator — just Rust functions calling Rust functions.
+The parser is hand-written recursive descent, using [Logos](https://github.com/logos-rs/logos) for lexing. No parser generator, just Rust functions calling Rust functions.
 
 ```
 Source text → Logos lexer → Token stream → Recursive descent parser → AST
 ```
 
-The AST can be serialized two ways:
-- **Internal format** — used by CLI and Python bindings
-- **TypeScript-compatible format** — used by WASM bindings, matches the frontend's `PatchProgram` type exactly
+The AST serializes two ways: an internal format used by the CLI and Python bindings, and a TypeScript-compatible format used by the WASM bindings that matches the frontend's `PatchProgram` type exactly.
 
 Error recovery works by skipping to the next top-level keyword when a parse error is encountered. The parser always produces a partial AST alongside any errors.
 
@@ -167,4 +162,4 @@ PatchLang is the file format for [SignalCanvas](https://github.com/ByteBard97/Si
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT, see [LICENSE](LICENSE).

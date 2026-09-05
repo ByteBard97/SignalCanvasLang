@@ -53,7 +53,7 @@ config FOH_Console {
 }
 ```
 
-That is a complete, valid project. The compiler parses it, validates it, and the frontend renders it on a canvas. The layout sidecar (`simple-venue.layout.json`) stores block positions — if it does not exist, auto-layout generates one.
+That is a complete, valid project. The compiler parses it, validates it, and the frontend renders it on a canvas. The layout sidecar (`simple-venue.layout.json`) stores block positions. If it does not exist, auto-layout generates one.
 
 ---
 
@@ -133,13 +133,13 @@ connect SL_Rack.Dante_Pri_Out -> Console.Dante_Pri_In {
 bridge SL_Rack.Mic_In[1..32] -> Console.Dante_Pri_In[1..32]
 ```
 
-The hierarchy is not a special feature. It is just templates importing other templates via `use`. A `.patch` file IS a template at every scale — whether it describes a single device, a room, a building, or an entire campus.
+The hierarchy is not a special feature. It is just templates importing other templates via `use`. A `.patch` file IS a template at every scale, whether it describes a single device, a room, a building, or an entire campus.
 
 ---
 
 ## Bus Display Names (`label:`)
 
-Broadcast console software uses `>` as a routing convention in bus names — `SPOTIFY>FOH`, `PQ>MM`, `Shouts > MD Conf`. These characters are invalid in PatchLang identifiers. The `label:` property on a bus body carries the human-readable display name while the identifier remains the stable cross-reference key.
+Broadcast console software uses `>` as a routing convention in bus names: `SPOTIFY>FOH`, `PQ>MM`, `Shouts > MD Conf`. These characters are invalid in PatchLang identifiers. The `label:` property on a bus body carries the human-readable display name while the identifier remains the stable cross-reference key.
 
 ```
 instance FOH_Engine is CL5 {
@@ -158,7 +158,7 @@ instance FOH_Engine is CL5 {
 }
 ```
 
-The identifier (`SpotifyFOH`) is used everywhere buses are cross-referenced. The `label` is display-only — it does not affect routing, DRC, or signal tracing. The JSON output omits `label` when not set, so existing files are unaffected.
+The identifier (`SpotifyFOH`) is used everywhere buses are cross-referenced. The `label` is display-only: it does not affect routing, DRC, or signal tracing. The JSON output omits `label` when not set, so existing files are unaffected.
 
 This is the same identifier-vs-display-name pattern used by `config` port labels (`label Dante_Pri_In[1]: "Lead Vocal"`).
 
@@ -210,7 +210,7 @@ ring OptoCore_Redundant {
 }
 ```
 
-Implicit members (`member Console`) work when the device has a single port matching the ring's protocol. Explicit members (`member Console.OptoCore_B`) are needed when you want to specify which port participates — typically for redundant rings using the secondary fiber ports.
+Implicit members (`member Console`) work when the device has a single port matching the ring's protocol. Explicit members (`member Console.OptoCore_B`) are needed when you want to specify which port participates, typically for redundant rings using the secondary fiber ports.
 
 ---
 
@@ -236,7 +236,7 @@ connect MON.Dante_Pri_Out[auto] -> IEM_Bass.Dante_In[1..2]
 connect MON.Dante_Pri_Out[auto] -> IEM_BV.Dante_In[1..2]
 ```
 
-The compiler resolves top-to-bottom: first `[auto]` gets `[1..2]`, second gets `[3..4]`, and so on. You can mix explicit and auto — explicit indices are pre-scanned and skipped during auto-allocation:
+The compiler resolves top-to-bottom: first `[auto]` gets `[1..2]`, second gets `[3..4]`, and so on. You can mix explicit and auto: explicit indices are pre-scanned and skipped during auto-allocation:
 
 ```
 # Recorder always gets channels 33-34 (locked to a Dante preset)
@@ -247,7 +247,7 @@ connect MON.Dante_Pri_Out[auto] -> IEM_WL.Dante_In[1..2]     # resolves to [1..2
 connect MON.Dante_Pri_Out[auto] -> IEM_MD.Dante_In[1..2]     # resolves to [3..4]
 ```
 
-Use `[auto]` when the specific channel numbers do not matter — the design intent is "each device gets its own pair, no overlaps." Use explicit indices when the channel assignment is locked to hardware (a Dante preset, a saved show file) or when the diagram IS the configuration document.
+Use `[auto]` when the specific channel numbers do not matter: the design intent is "each device gets its own pair, no overlaps." Use explicit indices when the channel assignment is locked to hardware (a Dante preset, a saved show file) or when the diagram IS the configuration document.
 
 ---
 
@@ -298,7 +298,7 @@ template Rio1608_D2 {
 }
 ```
 
-The first bridge says "mic inputs are forwarded out over Dante." The second says "Dante receive channels drive the line outputs." This gives the DRC enough information to trace a signal from a microphone on stage through the network to a console, and back out to an amplifier — without confusing which direction each channel flows.
+The first bridge says "mic inputs are forwarded out over Dante." The second says "Dante receive channels drive the line outputs." This gives the DRC enough information to trace a signal from a microphone on stage through the network to a console, and back out to an amplifier, without confusing which direction each channel flows.
 
 ---
 
@@ -341,13 +341,13 @@ instance FOH_Engine is Venue_FOH_Rack {
 }
 ```
 
-The template declares what card types each slot accepts. The instance declares what is actually installed. Unassigned slots remain empty — the compiler does not require every slot to be populated.
+The template declares what card types each slot accepts. The instance declares what is actually installed. Unassigned slots remain empty: the compiler does not require every slot to be populated.
 
 ---
 
 ## Internal Routes
 
-Routes describe signal paths inside a single device — how an input gets patched to an output within the hardware's internal matrix:
+Routes describe signal paths inside a single device: how an input gets patched to an output within the hardware's internal matrix:
 
 ```
 template Venue_FOH_Rack {
@@ -377,7 +377,7 @@ Routes are distinct from `connect` (which describes a cable between two devices)
 
 ## Config Block (Channel Labels)
 
-A `config` block attaches metadata to individual channels on an instance — typically channel names and per-channel settings like phantom power:
+A `config` block attaches metadata to individual channels on an instance, typically channel names and per-channel settings like phantom power:
 
 ```
 template StageBox_16x0 {
@@ -404,13 +404,13 @@ config Drums {
 }
 ```
 
-Labels serve two purposes: they document the input list (what mic goes where) and they carry operational metadata (phantom power, stand type) that the frontend can display. The key-value pairs inside the braces after the label string are free-form — use whatever fields your workflow needs.
+Labels serve two purposes: they document the input list (what mic goes where) and they carry operational metadata (phantom power, stand type) that the frontend can display. The key-value pairs inside the braces after the label string are free-form: use whatever fields your workflow needs.
 
 ---
 
 ## Template Composition
 
-A template can contain instances of other templates and internal connections between them. This is how you build reusable subsystems — a "Monitor Rig" template that bundles a console with its IEM transmitters:
+A template can contain instances of other templates and internal connections between them. This is how you build reusable subsystems: a "Monitor Rig" template that bundles a console with its IEM transmitters:
 
 ```
 template PSM1000 {
@@ -446,4 +446,4 @@ template Monitor_Rig {
 }
 ```
 
-When you instantiate `Monitor_Rig`, you get the console and all three IEM transmitters as a single block on the canvas. Double-clicking it opens the internal view showing the wiring between them. This is the same mechanism that makes multi-file projects work — a building template containing room instances is just a larger-scale composition.
+When you instantiate `Monitor_Rig`, you get the console and all three IEM transmitters as a single block on the canvas. Double-clicking it opens the internal view showing the wiring between them. This is the same mechanism that makes multi-file projects work: a building template containing room instances is just a larger-scale composition.

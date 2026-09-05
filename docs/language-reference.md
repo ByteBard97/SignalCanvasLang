@@ -35,7 +35,7 @@ letter     = "A".."Z" | "a".."z" ;
 digit      = "0".."9" ;
 ```
 
-Identifiers name templates, instances, ports, signals, and properties. They must start with a letter or underscore. Hyphens are not allowed — use underscores.
+Identifiers name templates, instances, ports, signals, and properties. They must start with a letter or underscore. Hyphens are not allowed; use underscores instead.
 
 ```
 FOH_Console       (* valid *)
@@ -55,11 +55,11 @@ ring  member
 
 Keywords can be used as property keys but not as names for templates, instances, or ports.
 
-`auto` is a **contextual keyword** — it is only recognized inside index brackets `[]`. Outside brackets, `auto` is a valid identifier (e.g., `instance auto is T`).
+`auto` is a **contextual keyword**: it is only recognized inside index brackets `[]`. Outside brackets, `auto` is a valid identifier (e.g., `instance auto is T`).
 
-`for`, `over`, and `generate` are reserved for future use (parametric template generation). No grammar production exists for them yet. They are dead weight in the current keyword set but reserved intentionally — removing them now would allow a template named `for`, which would break parametric generation if it ships.
+`for`, `over`, and `generate` are reserved for future use (parametric template generation). No grammar production exists for them yet. They are dead weight in the current keyword set, but they are reserved intentionally: removing them now would allow a template named `for`, which would break parametric generation if it ships.
 
-`card` is **not** a keyword — it is available as an identifier. Card templates use `meta { kind: "card" }` instead.
+`card` is **not** a keyword; it is available as an identifier. Card templates use `meta { kind: "card" }` instead.
 
 #### Keyword Status
 
@@ -68,9 +68,9 @@ Keywords can be used as property keys but not as names for templates, instances,
 | `template`, `instance`, `is`, `connect`, `bridge`, `use` | Core | Non-negotiable |
 | `signal`, `flag`, `stream`, `config` | Active | All appear in production files; each covers a distinct documentation concept |
 | `ring`, `network`, `bus`, `route`, `slot`, `member` | Active | Required for their respective protocol/routing features |
-| `bridge_group` | **Watch — removal candidate** | Zero usage in any fixture or production file. Desugars trivially to individual `bridge` declarations. Low removal cost while language is young. |
-| `link_group` | **Watch — removal candidate** | Zero usage in any fixture or production file. Desugars trivially to individual `connect` declarations. Low removal cost while language is young. |
-| `for`, `over`, `generate` | Reserved (no grammar) | Intentionally dead — reserved for parametric template generation |
+| `bridge_group` | **Watch: removal candidate** | Zero usage in any fixture or production file. Desugars trivially to individual `bridge` declarations. Low removal cost while language is young. |
+| `link_group` | **Watch: removal candidate** | Zero usage in any fixture or production file. Desugars trivially to individual `connect` declarations. Low removal cost while language is young. |
+| `for`, `over`, `generate` | Reserved (no grammar) | Intentionally dead, reserved for parametric template generation |
 
 ### Annotations
 
@@ -94,7 +94,7 @@ being silently reinterpreted.
 
 The formatter always escapes on the way out, so a user-supplied value like a bus named
 `The "Big" Mix` survives a format → parse round trip intact. Before this existed, such a
-value was silently truncated to `The ` — the emitted text still parsed, just with a
+value was silently truncated to `The `; the emitted text still parsed, just with a
 different value. See D026.
 
 A raw newline inside quotes is still accepted, so files written before escaping existed
@@ -126,7 +126,7 @@ statement = template-decl | instance-decl | connect-decl | bridge-decl
 
 ### Template Declaration
 
-Defines a reusable device type. Templates are the fundamental building block — whether describing a single device, a room full of equipment, a building, or an entire campus.
+Defines a reusable device type. Templates are the fundamental building block, used to describe anything from a single device to a room full of equipment, a building, or an entire campus.
 
 ```ebnf
 template-decl = "template" identifier [ param-list ] [ version-annotation ]
@@ -209,7 +209,7 @@ The `kind` key classifies the template's role in the hierarchy. Known values:
 | Kind | Meaning |
 |------|---------|
 | `device` | Physical hardware (default when `kind` is absent) |
-| `card` | Expansion card — requires `fits` |
+| `card` | Expansion card, requires `fits` |
 | `fixed-converter` | Deterministic routing device (stagebox, bridge) |
 | `stage-core` | Passive XLR loom/snake |
 | `mic-di` | Single microphone or DI box |
@@ -251,22 +251,22 @@ Mix_Bus[1..24]: out                         # outputs, no connector specified
 
 #### Port Direction Model
 
-Channel-based protocols (Dante, MADI, AES67, SDI, Analogue, AES3, SoundGrid, NDI, SMPTE2110) get **two explicit port lines** — one `in`, one `out`. This allows asymmetric channel counts (e.g., CL5 receives 72 Dante channels, sends 24).
+Channel-based protocols (Dante, MADI, AES67, SDI, Analogue, AES3, SoundGrid, NDI, SMPTE2110) get **two explicit port lines**, one `in` and one `out`. This allows asymmetric channel counts (e.g., CL5 receives 72 Dante channels, sends 24).
 
 `io` is reserved for ring/bus protocols (OptoCore, TWINLANe, AVB/Milan, GigaACE) and management ports (Ethernet_Mgmt).
 
-WordClock uses **split `in`/`out`** despite being a management signal. Every WordClock-capable device has separate physical 75Ω BNC connectors for input and output — `io` was incorrect. See D008.
+WordClock uses **split `in`/`out`** despite being a management signal. Every WordClock-capable device has separate physical 75Ω BNC connectors for input and output, so `io` was incorrect. See D008.
 
 | Direction | When to use |
 |-----------|-------------|
-| `in()`  | Signal enters the device — mic preamps, Dante receive, SDI input, WordClock receive |
-| `out()` | Signal leaves the device — headphone out, Dante send, SDI output, WordClock master |
-| `io()`  | Genuinely bidirectional — ring/bus protocols (OptoCore, AVB), management (Ethernet_Mgmt) |
+| `in()`  | Signal enters the device: mic preamps, Dante receive, SDI input, WordClock receive |
+| `out()` | Signal leaves the device: headphone out, Dante send, SDI output, WordClock master |
+| `io()`  | Genuinely bidirectional: ring/bus protocols (OptoCore, AVB), management (Ethernet_Mgmt) |
 
 | Direction | Protocols |
 |-----------|-----------|
 | **Two lines** (`in` + `out`) | Dante, AES67, MADI, Analogue, AES3, SDI, SoundGrid, NDI, SMPTE2110 |
-| **Two lines** (`in` + `out`) | WordClock — always directional, separate physical BNC connectors |
+| **Two lines** (`in` + `out`) | WordClock, always directional, separate physical BNC connectors |
 | **`io`** (ring/bus) | OptoCore, TWINLANe, AVB/Milan, GigaACE |
 | **`io`** (management) | Ethernet_Mgmt |
 
@@ -343,7 +343,7 @@ connect FOH_Console.Dante_Pri_Out -> Stage_Left.Dante_Pri_In {
 }
 ```
 
-Each physical cable with split in/out ports gets **two connect statements** — one per signal direction. Cable metadata is duplicated on both. Do NOT use `link_group` for bidirectional pairs — link groups are for multi-cable logical units (like quad-link 4K SDI).
+Each physical cable with split in/out ports gets **two connect statements**, one per signal direction. Cable metadata is duplicated on both. Do NOT use `link_group` for bidirectional pairs; link groups are for multi-cable logical units (like quad-link 4K SDI).
 
 #### DRC Suppression
 
@@ -382,9 +382,9 @@ mapping: "1->3, 2->4, 3->1"      # explicit per-channel pairs
 
 `bridge` has two scopes with distinct semantics:
 
-**Inside a template** — a signal path guaranteed by the device's design. This path exists in every physical unit of this template regardless of software configuration or operator action. The compiler treats it as invariant. Probe does not push it. Use `bridge` for paths the manufacturer hardwired: mic preamps feeding Dante outputs, ADC outputs feeding DSP inputs, protocol converters passing signal through.
+**Inside a template:** a signal path guaranteed by the device's design. This path exists in every physical unit of this template regardless of software configuration or operator action. The compiler treats it as invariant. Probe does not push it. Use `bridge` for paths the manufacturer hardwired: mic preamps feeding Dante outputs, ADC outputs feeding DSP inputs, protocol converters passing signal through.
 
-**Top-level between instances** — a system designer's DRC assertion. Declares that signal flows from one instance's port to another for tracing purposes. Used to connect signal chains across devices (e.g., telling the tracer that mic inputs on a stagebox ultimately reach console inputs via the Dante network). Not pushed by Probe.
+**Top-level between instances:** a system designer's DRC assertion. Declares that signal flows from one instance's port to another for tracing purposes. Used to connect signal chains across devices (e.g., telling the tracer that mic inputs on a stagebox ultimately reach console inputs via the Dante network). Not pushed by Probe.
 
 **`bridge` is not for operator-configured routing.** Internal routing that an operator can change (console DSP assignments, matrix crosspoints, DSP patching) belongs in the instance body as `route`.
 
@@ -426,7 +426,7 @@ The bridge target is the port where the signal is *going*. Mic inputs leave the 
 
 ### Bridge Group Declaration
 
-Sequential channel mapping — multiple sources auto-fill a destination range.
+Sequential channel mapping: multiple sources auto-fill a destination range.
 
 ```ebnf
 bridge-group-decl = "bridge_group" port-ref "{" { port-ref } "}" ;
@@ -466,7 +466,7 @@ stream-decl = "stream" identifier [ "{" { key-value-pair } "}" ] ;
 ```
 
 A stream's `source` may carry an index spec selecting which of the source interface's
-channels ride the flow. The selection is **ordered and position-significant** — an AES67
+channels ride the flow. The selection is **ordered and position-significant**: an AES67
 receiver maps by position, so `[7, 1, 5, 3]` is not the same flow as `[1, 3, 5, 7]`. It is
 never sorted or deduplicated, and a repeated index means deliberate replication of one
 source onto two receiver positions. No index means the whole interface. See D025.
@@ -498,7 +498,7 @@ flag Genlock_OK {
 
 A `stream` is a **transmit** construct. In both Dante and AES67 a flow is created and
 advertised by the *talker*; a receiver never originates a flow, it only subscribes to
-someone else's. So `direction` **defaults to `tx`** when absent — an undirected
+someone else's. So `direction` **defaults to `tx`** when absent. An undirected
 `stream { source: ... }` is a transmit by definition, not by convention.
 
 `direction: "rx"` is the explicit marker for a flow this device is *subscribed to
@@ -550,9 +550,9 @@ use infrastructure.dante                  # bare namespace — import the module
 
 **Selective imports** are preferred for clarity. Wildcard imports pull in everything, which can cause name collisions in large projects.
 
-**Naming convention (required for shared libraries):** Template names must use a manufacturer prefix or model number — not generic names. `CL5`, `Rio3224`, `SD12`, `5601MSC` are correct. `Patch_Bay` or `Power_Amp` standing alone are not acceptable in any library intended for reuse; they must be prefixed (`Neutrik_Patch_Bay`, `Yamaha_Power_Amp`). Generic names are only acceptable in project-local templates that are never published. This convention eliminates namespace collisions structurally — model numbers and manufacturer-prefixed names do not collide across vendors.
+**Naming convention (required for shared libraries):** Template names must use a manufacturer prefix or model number, not generic names. `CL5`, `Rio3224`, `SD12`, `5601MSC` are correct. `Patch_Bay` or `Power_Amp` standing alone are not acceptable in any library intended for reuse; they must be prefixed (`Neutrik_Patch_Bay`, `Yamaha_Power_Amp`). Generic names are only acceptable in project-local templates that are never published. Model numbers and manufacturer-prefixed names do not collide across vendors, so this convention avoids namespace collisions structurally.
 
-**Import aliasing (`as`):** Not supported. If two libraries define the same template name, the fix is to correct the naming in the library (use a manufacturer prefix), not to alias at the import site. If this ever proves insufficient, the future escape hatch is qualified references (`yamaha::CL5`) — not `as` aliasing. See design decision D007.
+**Import aliasing (`as`):** Not supported. If two libraries define the same template name, the fix is to correct the naming in the library (use a manufacturer prefix), not to alias at the import site. If this ever proves insufficient, the future escape hatch is qualified references (`yamaha::CL5`), not `as` aliasing. See design decision D007.
 
 ### Ring Declaration
 
@@ -577,10 +577,10 @@ Member order reflects the physical ring topology.
 
 **Member syntax:** Both explicit (`member Console.OptoCore_A`) and implicit (`member Console`) forms are accepted by the parser.
 
-- **Explicit form** — `member Instance.Port` — references a specific port. Required when a device has multiple ring ports (e.g., OptoCore_A and OptoCore_B).
-- **Implicit form** — `member Instance` — the compiler resolves the port by finding the single port whose attributes match the ring's `protocol`. If zero or multiple ports match, DRC emits an error (R04).
+- **Explicit form:** `member Instance.Port` references a specific port. Required when a device has multiple ring ports (e.g., OptoCore_A and OptoCore_B).
+- **Implicit form:** `member Instance` lets the compiler resolve the port by finding the single port whose attributes match the ring's `protocol`. If zero or multiple ports match, DRC emits an error (R04).
 
-The emitter **must always output the explicit form** — implicit resolution is fragile if a device later gains a second ring port.
+The emitter **must always output the explicit form**, because implicit resolution is fragile if a device later gains a second ring port.
 
 **DRC rules:** R01 (unknown instance), R02 (unknown port in explicit form), R03 (protocol attribute mismatch), R04 (ambiguous implicit resolution).
 
@@ -606,7 +606,7 @@ ring OptoCore_Ring {
 
 ### Network Declaration
 
-Declares L2 switched-fabric domain membership for channel-based protocols. Unlike `ring`, members are unordered — any member can reach any other member.
+Declares L2 switched-fabric domain membership for channel-based protocols. Unlike `ring`, members are unordered: any member can reach any other member.
 
 ```ebnf
 network-decl  = "network" identifier "{" { network-entry } "}" ;
@@ -616,12 +616,12 @@ port-group-ref = identifier                               # device-level
                | identifier "." "slot" "[" index "]" ;   # card in slot
 ```
 
-**Key-value pairs:** `protocol` (required — `"Dante"`, `"SoundGrid"`, `"AVB"`, `"Milan"`, `"AES67"`), `label`, `vlan`.
+**Key-value pairs:** `protocol` (required: `"Dante"`, `"SoundGrid"`, `"AVB"`, `"Milan"`, `"AES67"`), `label`, `vlan`.
 
 **Semantics:**
 - Port-group level: `FOH.Dante_Pri` covers both `Dante_Pri_In` and `Dante_Pri_Out`
-- Slot reference: `FOH.MY_Slot[1]` — all ports on the card in slot 1 (clean multi-homed expression)
-- Cross-network connects are valid PatchLang — the compiler does not warn on them. See D020 for rationale: cross-network topology warnings require switch-level context the compiler intentionally does not model. The compiler emits `network_membership` data in its output; the UI uses this for visual grouping and topology-aware warnings.
+- Slot reference: `FOH.MY_Slot[1]` covers all ports on the card in slot 1 (clean multi-homed expression)
+- Cross-network connects are valid PatchLang; the compiler does not warn on them. See D020 for rationale: cross-network topology warnings require switch-level context the compiler intentionally does not model. The compiler emits `network_membership` data in its output; the UI uses this for visual grouping and topology-aware warnings.
 
 ```
 network Auditorium_Dante {
@@ -639,9 +639,9 @@ network Secondary_Hall_Dante {
 }
 ```
 
-**vs `ring`:** Use `ring` for physical bus topology where member order matters (OptoCore, TWINLANe, GigaACE). Use `network` for switched fabrics where membership matters but order does not (Dante, SoundGrid, AVB). AVB devices may declare both — `ring` for the physical topology, `network` for the L2 domain.
+**vs `ring`:** Use `ring` for physical bus topology where member order matters (OptoCore, TWINLANe, GigaACE). Use `network` for switched fabrics where membership matters but order does not (Dante, SoundGrid, AVB). AVB devices may declare both: `ring` for the physical topology, `network` for the L2 domain.
 
-**DRC rules:** N01 (unknown instance reference). Cross-network connect warnings are intentionally absent from the compiler — see D020.
+**DRC rules:** N01 (unknown instance reference). Cross-network connect warnings are intentionally absent from the compiler; see D020.
 
 ### Slot Definition (inside templates)
 
@@ -672,7 +672,7 @@ instance Console is CL5 {
 }
 ```
 
-Slot assignments use **bare identifiers** (the template name of the card). The grammar also accepts `string-literal` for backward compatibility — new code must use bare identifiers.
+Slot assignments use **bare identifiers** (the template name of the card). The grammar also accepts `string-literal` for backward compatibility, but new code must use bare identifiers.
 
 ### Card Port Expansion
 
@@ -696,13 +696,13 @@ connect FOH.MicIn[1] -> Amp.Input   // MicIn comes from the card
 **Collision rules:**
 - If a card port name duplicates a template port name, the template port takes precedence and an **S16** error is emitted.
 - If two different cards on the same instance declare the same port name, an **S16** error is emitted.
-- Internal routing (`route`, `bus`) checks the instance's *effective* port namespace — both template-declared ports and card-provided ports from slot assignments. See D015.
+- Internal routing (`route`, `bus`) checks the instance's *effective* port namespace: both template-declared ports and card-provided ports from slot assignments. See D015.
 
 ### Route Entry (inside instance body)
 
 `route` declares the current operator-configured internal routing state of a specific device instance. It maps an input channel to an output channel within one device. This is the complement to `bridge`: where `bridge` in a template captures what the manufacturer hardwired, `route` in an instance captures what the operator configured.
 
-`route` is what Probe generates from Ember+ matrix crosspoints, Q-SYS mixer routing, Yamaha SCP patching, and other device control protocols. In Probe v2, `route` declarations are the target of configuration push — the compiler's route table is applied to live hardware.
+`route` is what Probe generates from Ember+ matrix crosspoints, Q-SYS mixer routing, Yamaha SCP patching, and other device control protocols. In Probe v2, `route` declarations are the target of configuration push: the compiler's route table is applied to live hardware.
 
 ```ebnf
 route-entry = "route" port-ref-or-local "->" port-ref-or-local ;
@@ -725,7 +725,7 @@ The optional `label` property stores a human-readable display name that may cont
 invalid in PatchLang identifiers (e.g. `>`, `-`). The identifier is the stable cross-reference
 key; `label` is display-only and does not affect routing, DRC, or signal tracing.
 
-Bus outputs require a quoted label — the user-defined name for the signal this output carries (e.g. `"Link 1-L"`, `"IEM Mix 1"`). The label must be non-empty. The `:` and port reference are optional: omitting them declares an unrouted output that exists in the bus manager but has not yet been cabled. Multiple destinations can be comma-separated for outputs that route to more than one port simultaneously.
+Bus outputs require a quoted label: the user-defined name for the signal this output carries (e.g. `"Link 1-L"`, `"IEM Mix 1"`). The label must be non-empty. The `:` and port reference are optional: omitting them declares an unrouted output that exists in the bus manager but has not yet been cabled. Multiple destinations can be comma-separated for outputs that route to more than one port simultaneously.
 
 ```
 bus Main_LR {
@@ -748,7 +748,7 @@ bus Link_1 {
 This is the same identifier-vs-display-name separation used by `config` port labels.
 The JSON output omits `label` when it is not set (backward-compatible).
 
-Both inputs and outputs accept the fully-qualified `Instance.Port` form when the signal crosses to a different device — for example, an Avantis bus routing through a GX4816 expansion unit:
+Both inputs and outputs accept the fully-qualified `Instance.Port` form when the signal crosses to a different device, for example an Avantis bus routing through a GX4816 expansion unit:
 
 ```
 bus Drums {
@@ -758,7 +758,7 @@ bus Drums {
 }
 ```
 
-Cross-device refs are passed through without S05 validation — the port belongs to the target device's template, not the owning instance's.
+Cross-device refs are passed through without S05 validation, because the port belongs to the target device's template, not the owning instance's.
 
 #### Bus Inserts
 
@@ -776,23 +776,23 @@ bus Main_LR {
 }
 ```
 
-Each entry is an **ordered** list of legs — one leg for a mono insert, two for stereo
+Each entry is an **ordered** list of legs: one leg for a mono insert, two for stereo
 (`[L, R]`). Order is significant: reversing the list swaps the stereo image.
 
 Legs are **independent**. There is no adjacency or equal-width constraint, so the
-scattered patches that occur in practice are representable — a send on MADI 3 and 10
+scattered patches that occur in practice are representable. A send on MADI 3 and 10
 returning on MADI 4 and 8 is valid, and a send list may be a different length than its
 return list. Unlike bus `input:` entries, insert legs are never grouped by port or
 channel-unioned; a port may legitimately repeat across legs.
 
-An insert is a **detour, not a destination** — the legs do not appear among the bus's
+An insert is a detour rather than a destination: the legs do not appear among the bus's
 inputs or outputs, and signal tracing treats them as a hop rather than a new path.
 
 Each leg must carry a single-channel index. A range (`Ext_Out[1..2]`) is not accepted;
 write the legs out individually so the width stays explicit.
 
 > **Version note.** Added in PatchLang v0.3.2. On earlier compilers an `insert_send:`
-> line inside `bus { }` is silently skipped by the parser's catch-all — no error is
+> line inside `bus { }` is silently skipped by the parser's catch-all; no error is
 > raised and the data is lost. Tools writing this syntax should require v0.3.2+.
 
 ---
@@ -827,7 +827,7 @@ index-element = number [ ".." number ] | "auto" ;
 When used on one side of a `connect` or `bridge`, the compiler allocates the next N contiguous available channels from the port's declared range, where N is inferred from the other side. Channels are allocated sequentially in declaration order and skip any explicitly claimed indices.
 
 **Constraints:**
-- `[auto]` must be the sole element — `[auto, 5]` is a parse error
+- `[auto]` must be the sole element: `[auto, 5]` is a parse error
 - Both sides of a connection cannot use `[auto]` (error A02)
 - `[auto]` requires a vector port with a declared range (error A03)
 - `[auto]` is not valid in `route` or `bus` declarations (error A01)
@@ -857,10 +857,10 @@ Three mechanisms express channel routing. They operate at different layers and d
 **When to use each:**
 
 - **Explicit range** (`[1..8]`): You know exactly which channels connect. Preferred when channels are not sequential or when you need to be explicit for documentation clarity.
-- **`[auto]`**: Sequential fill where you don't care which specific channels are used, only that the next N available are allocated. Use when daisy-chaining multiple stageboxes into a console — each stagebox auto-fills the next block.
+- **`[auto]`**: Sequential fill where you don't care which specific channels are used, only that the next N available are allocated. Use when daisy-chaining multiple stageboxes into a console: each stagebox auto-fills the next block.
 - **`mapping: "1:1"`**: Same as the default; only useful to make the intent explicit. Prefer omitting it.
 - **`mapping: "offset N"`**: All source channels shifted by N. Use when a second stagebox needs to start at channel 17 but connects its own channels 1–16.
-- **`mapping: "1->3, 2->4"`**: Explicit per-channel cross-patching. Use sparingly — prefer routing this in the device instance as a `route` entry if it represents operator-configured state.
+- **`mapping: "1->3, 2->4"`**: Explicit per-channel cross-patching. Use sparingly; prefer routing this in the device instance as a `route` entry if it represents operator-configured state.
 
 **`[auto]` vs `mapping: "offset N"`:**
 Both can express "start 16 channels later," but `[auto]` is preferred when the offset is determined by earlier connect declarations (compiler tracks it). Use `mapping: "offset N"` when you need to state the offset explicitly regardless of what other connects exist.

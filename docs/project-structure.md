@@ -10,7 +10,7 @@ permalink: /project-structure/
 
 A SignalCanvas project is **hierarchical**. Templates compose recursively: devices make up rooms, rooms make up buildings, buildings make up campuses. Each level that renders on a canvas has its own `.patch` + `.layout.json` pair.
 
-A `.patch` file IS a template at every scale. Whether it describes a single Yamaha CL5 or an entire campus, it is the same construct. The hierarchy is not a special feature — it is templates importing other templates via `use` statements.
+A `.patch` file IS a template at every scale. Whether it describes a single Yamaha CL5 or an entire campus, it is the same construct. The hierarchy is not a special feature: it is templates importing other templates via `use` statements.
 
 ### The Three Layers
 
@@ -65,7 +65,7 @@ If a `.layout.json` file does not exist for a `.patch` file, the frontend offers
 
 ### Design Principle
 
-`project.json` declares what cannot be inferred from the `use` graph. Sub-level files are **not listed** — the compiler discovers them by walking `use` statements from the root. Only metadata, library declarations, and external dependencies appear in the manifest.
+`project.json` declares what cannot be inferred from the `use` graph. Sub-level files are **not listed**; the compiler discovers them by walking `use` statements from the root. Only metadata, library declarations, and external dependencies appear in the manifest.
 
 ### Schema
 
@@ -98,13 +98,11 @@ If a `.layout.json` file does not exist for a `.patch` file, the frontend offers
 
 ### What Is NOT in `project.json`
 
-- **Sub-level file list.** Inferred from `use` graph. Adding a `use` statement makes a file part of the project. DRY.
-- **Layout sidecar mappings.** Convention-based: `foo.patch` → `foo.layout.json`. No explicit mapping needed.
-- **The resolved file graph.** That is the compiler's output, not user-maintained data.
+The sub-level file list is inferred from the `use` graph; adding a `use` statement makes a file part of the project, so there's no separate list to keep in sync. Layout sidecar mappings are convention-based (`foo.patch` maps to `foo.layout.json`), so no explicit mapping is needed. The resolved file graph is the compiler's output, not user-maintained data.
 
 ### Why Sub-Levels Are Inferred
 
-Two engineers adding rooms to different buildings never touch `project.json` — they just create `.patch` files and add `use` statements. No merge conflicts on a shared manifest. The `use` graph in `.patch` files is the single source of truth for project hierarchy.
+Two engineers adding rooms to different buildings never touch `project.json`; they just create `.patch` files and add `use` statements. No merge conflicts on a shared manifest. The `use` graph in `.patch` files is the single source of truth for project hierarchy.
 
 ### External Dependencies
 
@@ -119,10 +117,10 @@ The `dependencies` field in `project.json` declares external library packages by
 }
 ```
 
-Keys use `@tier/package-name` notation. Values are SemVer constraint strings (caret, tilde, exact, range — same semantics as npm). The compiler resolves the latest version of each package satisfying all stated constraints from the backend library tier system. See D021 for the full versioning design.
+Keys use `@tier/package-name` notation. Values are SemVer constraint strings (caret, tilde, exact, range; same semantics as npm). The compiler resolves the latest version of each package satisfying all stated constraints from the backend library tier system. See D021 for the full versioning design.
 
 **Resolution order:**
-1. Local `use` resolution takes precedence — a template found locally is used regardless of the version constraint.
+1. Local `use` resolution takes precedence: a template found locally is used regardless of the version constraint.
 2. Otherwise, the compiler resolves from the backend library tier using the constraint.
 3. If two constraints for the same package conflict, the compiler errors.
 

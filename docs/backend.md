@@ -41,7 +41,7 @@ class ProjectPage(models.Model):
     updated_at = DateTimeField(auto_now=True)
 ```
 
-Every canvas level — including the root — is a `ProjectPage`. The root page has `parent=None`. The `path` field matches the file path on disk.
+Every canvas level, including the root, is a `ProjectPage`. The root page has `parent=None`. The `path` field matches the file path on disk.
 
 ### LibraryFile (shared templates)
 

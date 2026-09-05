@@ -8,19 +8,19 @@ permalink: /compiler/
 
 ## Design Decisions
 
-### `bridge` vs `route` — Semantic Contract
+### `bridge` vs `route`: Semantic Contract
 
 These two keywords are semantically distinct and must remain so. The distinction drives Signal Trace annotation, DRC reliability, and Probe v2 push correctness.
 
 | Keyword | Scope | Meaning | Probe v2 behavior |
 |---|---|---|---|
-| `bridge` (in template) | Template body | Path guaranteed by device design. Exists in every unit regardless of software config. DRC treats as invariant. | Do NOT push — hardware-fixed |
-| `bridge` (top-level) | File root | System designer's DRC assertion for signal tracing across instances. | Read-only — not pushed |
+| `bridge` (in template) | Template body | Path guaranteed by device design. Exists in every unit regardless of software config. DRC treats as invariant. | Do NOT push (hardware-fixed) |
+| `bridge` (top-level) | File root | System designer's DRC assertion for signal tracing across instances. | Read-only, not pushed |
 | `route` (in instance) | Instance body | Operator-configured routing state for this specific device. May change between shows. | Push via Probe v2 (SCP, Ember+, AES70, Q-SYS) |
 
 **The rule for template authors:**
 - Use `bridge` only for paths the manufacturer hardwired into every unit (mic preamps → Dante output on a stagebox, ADC → DSP input on a fixed-path converter).
-- Do NOT use `bridge` for operator-configurable routing. A CL5 console template has no `bridge` declarations — all its internal routing is software-defined and belongs in the instance as `route`.
+- Do NOT use `bridge` for operator-configurable routing. A CL5 console template has no `bridge` declarations; all its internal routing is software-defined and belongs in the instance as `route`.
 - A fully flexible device (SDI router, DSP matrix, mixing console) may have zero `bridge` declarations in its template. That is correct.
 
 **Why this matters for Probe v2:** When pushing configuration to live hardware, Probe must know what to touch. `route` = push. `bridge` = do not touch. If `bridge` were used for operator-configurable paths (as the rejected "physical/logical axis" would allow), Probe would have no way to distinguish fixed hardware behavior from operator intent, making correct push implementation impossible.
@@ -33,7 +33,7 @@ These two keywords are semantically distinct and must remain so. The distinction
 
 See [Port Direction Model](language-reference.md#port-direction-model) in the Language Reference for the canonical table and rules.
 
-Summary: channel-based protocols (`in` + `out`), ring/bus protocols and management ports (`io`). WordClock always uses split `in`/`out` — never `io`.
+Summary: channel-based protocols (`in` + `out`), ring/bus protocols and management ports (`io`). WordClock always uses split `in`/`out`, never `io`.
 
 **Backward compatibility:** The parser accepts `io` for any protocol (legacy files). The emitter must produce split `in`/`out` for channel protocols.
 
@@ -85,9 +85,9 @@ rule::CL5::Mic_In::Dante_Out   # Route ID (4 segments)
 slot::CL5::MY_Slot             # Slot group ID (3 segments)
 ```
 
-The index suffix uses an underscore (`_1`), not a double-colon. The `instance_name` parameter is accepted by the API for symmetry but is not included in the generated ID — IDs are template-scoped.
+The index suffix uses an underscore (`_1`), not a double-colon. The `instance_name` parameter is accepted by the API for symmetry but is not included in the generated ID: IDs are template-scoped.
 
-The `::` separator cannot appear in PatchLang identifiers, making parsing unambiguous. The old `pl_` underscore format is deprecated — the loader should accept both formats during migration.
+The `::` separator cannot appear in PatchLang identifiers, making parsing unambiguous. The old `pl_` underscore format is deprecated; the loader should accept both formats during migration.
 
 ### Meta Schema
 
@@ -109,7 +109,7 @@ The `::` separator cannot appear in PatchLang identifiers, making parsing unambi
 
 The `kind` meta key classifies what a template represents in the project hierarchy. It replaces the former `device_type` field (see D011). Unknown values trigger an info-level warning (not an error), so custom kinds are allowed.
 
-**Device kinds** — templates representing physical hardware:
+**Device kinds** (templates representing physical hardware):
 
 | Value | Meaning | DRC / UI behavior |
 |-------|---------|-------------------|
@@ -122,7 +122,7 @@ The `kind` meta key classifies what a template represents in the project hierarc
 | `mic-splitter` | Multi-way analogue signal splitter | See "Splitter Modeling" below |
 | `rf-system` | Wireless mic receiver, IEM transmitter | Enables RF meta keys. See "RF Systems" below |
 
-**Composition kinds** — templates representing organizational groupings of devices:
+**Composition kinds** (templates representing organizational groupings of devices):
 
 | Value | Meaning | DRC / UI behavior |
 |-------|---------|-------------------|
@@ -188,7 +188,7 @@ ring OptoCore_Redundant {
 }
 ```
 
-**Redundant rings:** Standard broadcast practice (Hillsong uses this). Two ring declarations with the same protocol but different port references (A ports vs B ports). Each ring is independent — if one fails, the other carries traffic.
+**Redundant rings:** Standard broadcast practice (Hillsong uses this). Two ring declarations with the same protocol but different port references (A ports vs B ports). Each ring is independent: if one fails, the other carries traffic.
 
 **Protocol groups for compatibility checking:**
 - Dante / AES67 (interoperable)
@@ -247,10 +247,10 @@ The `patchlang` crate exports these public functions and types:
 
 For single-file projects or live editing:
 
-- **`parse(source)`** — Parse only. Returns `{ program, errors }`. No DRC.
-- **`check(source)`** — Parse + auto-resolution + DRC. Returns `{ program, errors, diagnostics }`. DRC is skipped when parse errors exist.
+- **`parse(source)`**: Parse only. Returns `{ program, errors }`. No DRC.
+- **`check(source)`**: Parse + auto-resolution + DRC. Returns `{ program, errors, diagnostics }`. DRC is skipped when parse errors exist.
 
-`check()` is the primary API for the editor — it provides real-time error feedback including auto-index resolution and DRC diagnostics. The pipeline is:
+`check()` is the primary API for the editor. It provides real-time error feedback including auto-index resolution and DRC diagnostics. The pipeline is:
 
 1. Parse source into AST
 2. If parse errors exist, return immediately (no DRC)
@@ -277,8 +277,8 @@ Individual statement emitters are in `formatter_emit.rs`.
 
 `parse_manifest(json)` parses and validates a `project.json` string. Returns a `ManifestResult` with:
 
-- `manifest` — parsed `ProjectManifest` (or `None` on invalid JSON)
-- `errors` — validation errors
+- `manifest`: parsed `ProjectManifest` (or `None` on invalid JSON)
+- `errors`: validation errors
 
 **`ProjectManifest` fields:**
 
@@ -300,8 +300,8 @@ Individual statement emitters are in `formatter_emit.rs`.
 
 The compiler supports two modes:
 
-- **Single-file:** `check(source)` — see above.
-- **Multi-file:** `compile_project(files, entry)` — receives all files as a map, resolves `use` statements internally.
+- **Single-file:** `check(source)`, see above.
+- **Multi-file:** `compile_project(files, entry)`, receives all files as a map, resolves `use` statements internally.
 
 The compiler does **no filesystem I/O**. All files are provided as strings by the caller.
 
@@ -329,12 +329,12 @@ pub fn compile_project(
 
 The compiler returns a `ProjectResult` containing:
 
-- `program` — the merged program (all files combined, `use` statements removed)
-- `errors` — parse errors, prefixed with `[filename]` for multi-file
-- `diagnostics` — DRC diagnostics on the merged program (empty if parse errors exist)
-- `files` — BFS-ordered list of file paths visited during compilation (index matches `span.file` on diagnostics)
-- `templateFiles` — map of template name to source file path (for hierarchy drill-down)
-- `useGraph` — map of file path to list of namespace dependencies (for sidebar tree)
+- `program`: the merged program (all files combined, `use` statements removed)
+- `errors`: parse errors, prefixed with `[filename]` for multi-file
+- `diagnostics`: DRC diagnostics on the merged program (empty if parse errors exist)
+- `files`: BFS-ordered list of file paths visited during compilation (index matches `span.file` on diagnostics)
+- `templateFiles`: map of template name to source file path (for hierarchy drill-down)
+- `useGraph`: map of file path to list of namespace dependencies (for sidebar tree)
 
 Every statement in the merged program carries a `span` with a `file` field (a `u16` index into the `files` array). This lets the frontend trace any statement or diagnostic back to its source file. For single-file `check()`, `span.file` is absent (null in JSON).
 
@@ -367,9 +367,9 @@ Dots become path separators. `.patch` extension is appended.
 
 ### How It Works
 
-1. **Phase 1 — Pre-scan:** Collect all explicit indices from connects and bridges to build a consumed-channels set per port
-2. **Phase 2 — Resolve:** Walk connections in declaration order; for each `[auto]`, allocate the next N contiguous channels not in the consumed set
-3. Results are stored in a side table — the AST retains `Auto` for roundtrip fidelity
+1. **Phase 1, pre-scan:** Collect all explicit indices from connects and bridges to build a consumed-channels set per port
+2. **Phase 2, resolve:** Walk connections in declaration order; for each `[auto]`, allocate the next N contiguous channels not in the consumed set
+3. Results are stored in a side table; the AST retains `Auto` for roundtrip fidelity
 4. The JSON output contains resolved concrete indices, not `auto`
 
 Channel count is inferred from the other side of the connection. If the other side specifies `[1..4]`, auto allocates 4 channels. If the other side is scalar (no index), auto allocates 1 channel.
@@ -383,9 +383,9 @@ These are non-suppressible errors emitted as diagnostics with `layer: structural
 | A02 | Both sides of a connection use `[auto]` |
 | A03 | `[auto]` on a scalar port (no declared range), or cannot infer count from other side |
 | A04 | Auto-assignment exceeds the port's declared range |
-| A05 | Explicit indices fragment the range — cannot find N contiguous channels |
+| A05 | Explicit indices fragment the range: cannot find N contiguous channels |
 
-### S14 — Vector Port Without Index
+### S14: Vector Port Without Index
 
 | Code | Severity | Condition |
 |------|----------|-----------|
@@ -401,15 +401,15 @@ Suppressible via `@suppress(structural)` on the connection.
 
 The DRC engine runs after parsing and auto-resolution. It operates on the full AST (merged for multi-file). The entry point is `drc::run_all(program)` which calls each layer checker in order:
 
-1. **Structural** — undefined references, duplicate names, port resolution, slot checks, meta hints
-2. **Direction** — invalid connection directions (out-to-out, in-to-in)
-3. **Mechanical** — physical connector type mismatches
-4. **Electrical** — signal level mismatches
-5. **Logical** — protocol mismatches
-6. **Temporal** — clock domain mismatches
-7. **Ring** — ring topology member validation
-8. **Flow** — AES67 interoperability (flow slots, channel limits, multicast prefixes)
-9. **Convention** — style and usage advisories
+1. **Structural**: undefined references, duplicate names, port resolution, slot checks, meta hints
+2. **Direction**: invalid connection directions (out-to-out, in-to-in)
+3. **Mechanical**: physical connector type mismatches
+4. **Electrical**: signal level mismatches
+5. **Logical**: protocol mismatches
+6. **Temporal**: clock domain mismatches
+7. **Ring**: ring topology member validation
+8. **Flow**: AES67 interoperability (flow slots, channel limits, multicast prefixes)
+9. **Convention**: style and usage advisories
 
 ### Diagnostic Structure
 
@@ -453,8 +453,8 @@ Connection-level suppression via `@suppress(layer_name)`. Supported layers: `str
 | S12 | Warning | Slot card does not declare `fits` matching slot format, or `fits` does not match |
 | S13 | Warning | Card `fits` value does not match any slot format in scope |
 | S14 | Warning | Vector port referenced without channel index (suppressible) |
-| S15 | Error | Range size mismatch — left and right sides of `connect` have different channel counts |
-| S16 | Error | Card port name collision — card port conflicts with template port or another card's port |
+| S15 | Error | Range size mismatch: left and right sides of `connect` have different channel counts |
+| S16 | Error | Card port name collision: card port conflicts with template port or another card's port |
 
 #### Card Port Expansion
 
@@ -462,7 +462,7 @@ When a card template is installed in a slot via a slot assignment on an instance
 
 - **Template ports win:** If a card port name duplicates a template port name, the template port takes precedence and an S16 error is emitted.
 - **Multi-card collision:** If two different cards installed on the same instance declare the same port name, an S16 error is emitted.
-- **Route/bus checks use effective ports:** Internal routing (`route`) and bus declarations (`bus`) check the instance's effective port namespace — both template-declared ports and card-provided ports are valid targets. This means a route like `route MADI[41] -> LINE[1]` works when `MADI` comes from an installed card.
+- **Route/bus checks use effective ports:** Internal routing (`route`) and bus declarations (`bus`) check the instance's effective port namespace: both template-declared ports and card-provided ports are valid targets. This means a route like `route MADI[41] -> LINE[1]` works when `MADI` comes from an installed card.
 
 #### Direction Layer (D01-D03)
 
@@ -470,7 +470,7 @@ When a card template is installed in a slot via a slot assignment on an instance
 |------|----------|------|
 | D01 | Error | Cannot connect output to output |
 | D02 | Error | Cannot connect input to input |
-| D03 | — | (Ports with direction `io` are always valid — skipped) |
+| D03 | — | (Ports with direction `io` are always valid: skipped) |
 
 #### Mechanical Layer (M01)
 
@@ -482,20 +482,20 @@ When a card template is installed in a slot via a slot assignment on an instance
 
 | Code | Severity | Rule |
 |------|----------|------|
-| E01 | Warning | Level mismatch — pad or level adjustment may be needed |
-| E02 | Error | Level mismatch — could damage target equipment |
+| E01 | Warning | Level mismatch: pad or level adjustment may be needed |
+| E02 | Error | Level mismatch: could damage target equipment |
 
 #### Logical Layer (L01)
 
 | Code | Severity | Rule |
 |------|----------|------|
-| L01 | Error | Protocol mismatch — protocols are not interoperable |
+| L01 | Error | Protocol mismatch: protocols are not interoperable |
 
 #### Temporal Layer (T01)
 
 | Code | Severity | Rule |
 |------|----------|------|
-| T01 | Warning | Clock domain mismatch — sample rate conversion may introduce artifacts |
+| T01 | Warning | Clock domain mismatch: sample rate conversion may introduce artifacts |
 
 #### Ring Layer (R01-R04)
 
@@ -504,25 +504,25 @@ When a card template is installed in a slot via a slot assignment on an instance
 | R01 | Error | Ring member references unknown instance |
 | R02 | Error | Ring member explicit port does not exist on template |
 | R03 | Warning | Ring member port does not have the ring's protocol in its attributes |
-| R04 | Error | Implicit ring member — zero or multiple ports match the protocol (ambiguous) |
+| R04 | Error | Implicit ring member: zero or multiple ports match the protocol (ambiguous) |
 
 #### Flow Layer (F01-F03)
 
 | Code | Severity | Rule |
 |------|----------|------|
-| F01 | Warning | Flow slot exhaustion — stream count exceeds Dante chipset limit |
-| F02 | Info | AES67 stream exceeds 8 channels — hardware will auto-split into multiple flows |
-| F03 | Error | Multicast prefix mismatch between AES67 devices — audio will silently fail |
+| F01 | Warning | Flow slot exhaustion: stream count exceeds Dante chipset limit |
+| F02 | Info | AES67 stream exceeds 8 channels: hardware will auto-split into multiple flows |
+| F03 | Error | Multicast prefix mismatch between AES67 devices: audio will silently fail |
 
 #### Convention Layer (C01-C05)
 
 | Code | Severity | Rule |
 |------|----------|------|
-| C01 | Info | Orphaned instance — has no connections, bridges, ring membership, or config |
-| C02 | Warning | Duplicate connection — same source/target port pair connected more than once |
+| C01 | Info | Orphaned instance: has no connections, bridges, ring membership, or config |
+| C02 | Warning | Duplicate connection: same source/target port pair connected more than once |
 | C03 | Info | Template declared with zero ports |
 | C04 | Info | Bus declared with zero outputs |
-| C05 | Info | Redundancy terminates at AES67 boundary — AES67 flows use Primary port only |
+| C05 | Info | Redundancy terminates at AES67 boundary: AES67 flows use Primary port only |
 
 #### Meta Info Hints (M-I01 through M-I08)
 
@@ -531,13 +531,13 @@ These run as part of the structural layer but use distinct codes:
 | Code | Severity | Rule |
 |------|----------|------|
 | M-I01 | Info | Unknown `kind` value |
-| M-I02 | Info | Deprecated `device_type` used — migrate to `kind` |
+| M-I02 | Info | Deprecated `device_type` used: migrate to `kind` |
 | M-I03 | Info | Unknown `rf_subtype` value |
 | M-I04 | Info | `rf_band` present but `kind` is not `rf-system` |
 | M-I05 | Warning | `rf_min_channels` is zero (must be positive) |
 | M-I06 | Warning | `rf_max_channels` is less than `rf_min_channels` |
-| M-I07 | Info | Unknown `dante_chipset` value — expected Ultimo, Broadway, Brooklyn_II, Brooklyn_3, or HC |
-| M-I08 | Warning | Ultimo chipset does not support AES67 — instance has `aes67_mode: true` but template uses Ultimo |
+| M-I07 | Info | Unknown `dante_chipset` value: expected Ultimo, Broadway, Brooklyn_II, Brooklyn_3, or HC |
+| M-I08 | Warning | Ultimo chipset does not support AES67: instance has `aes67_mode: true` but template uses Ultimo |
 
 ---
 
@@ -578,9 +578,9 @@ Unknown fields at any level produce errors.
 Cross-validates instance names between a `.patch` source and its `.layout.json`. Returns JSON: `{ valid: bool, errors: [...], warnings: [...] }`.
 
 Checks performed:
-- Runs `validate_layout` first — returns errors if the layout is invalid
-- **Orphaned layout keys** — position keys in the layout with no matching instance in the patch
-- **Missing positions** — instances in the patch with no position in the layout
+- Runs `validate_layout` first: returns errors if the layout is invalid
+- **Orphaned layout keys**: position keys in the layout with no matching instance in the patch
+- **Missing positions**: instances in the patch with no position in the layout
 
 Both are exported via WASM and Python.
 
@@ -629,7 +629,7 @@ All segments are sanitized before inclusion:
 
 ## PatchProgram Builder API
 
-The builder API (`crates/patchlang/src/builder/`) provides programmatic AST construction as an alternative to parsing text. The frontend calls builder methods via WASM instead of concatenating PatchLang strings in a TypeScript emitter. This eliminates the emitter bug class — port naming, direction model, and slot resolution are enforced in Rust.
+The builder API (`crates/patchlang/src/builder/`) provides programmatic AST construction as an alternative to parsing text. The frontend calls builder methods via WASM instead of concatenating PatchLang strings in a TypeScript emitter. This eliminates the emitter bug class: port naming, direction model, and slot resolution are enforced in Rust.
 
 ### Architecture
 
@@ -674,9 +674,9 @@ Call WASM: add_instance()  ──────► PatchProgramBuilder
 `add_connect()` validates at build time:
 1. Source and target instances exist
 2. Source and target ports exist (including card-expanded ports from slot assignments)
-3. Direction compatibility — out→out and in→in rejected
+3. Direction compatibility: out→out and in→in rejected
 
-Uses the same `build_effective_port_map` as the DRC — no rule duplication.
+Uses the same `build_effective_port_map` as the DRC: no rule duplication.
 
 ### Connection IDs
 
@@ -747,7 +747,7 @@ add_bridge(handle, sourceJson, targetJson);
 
 **Note:** `generate_port_id` and `set_slot` use `i32` for optional indices because `wasm_bindgen` does not support `Option<u32>`. Pass `-1` for "no index".
 
-**Handle lifecycle:** `create_program` / `create_program_from_source` allocate a handle (u32). `free_program` releases it. Handles are indices into `Vec<Option<PatchProgramBuilder>>` — freed slots are reused.
+**Handle lifecycle:** `create_program` / `create_program_from_source` allocate a handle (u32). `free_program` releases it. Handles are indices into `Vec<Option<PatchProgramBuilder>>`: freed slots are reused.
 
 ---
 
@@ -819,7 +819,7 @@ All errors raise `ValueError`. `remove_instance` returns cascade result as JSON 
 
 ## What We Are NOT Building
 
-- No module system or scoping — all templates share a flat namespace after merge
-- No incremental or cached compilation — total project size is well under 1 MB, compilation is milliseconds
-- No filesystem access in the compiler — callers provide strings
-- No dependency ordering by the compiler — `use`-walking from entry is sufficient
+- No module system or scoping: all templates share a flat namespace after merge
+- No incremental or cached compilation: total project size is well under 1 MB, compilation is milliseconds
+- No filesystem access in the compiler: callers provide strings
+- No dependency ordering by the compiler: `use`-walking from entry is sufficient

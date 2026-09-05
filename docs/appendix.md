@@ -4,7 +4,7 @@ title: Appendix
 permalink: /appendix/
 ---
 
-# Appendix — Design Decision Records
+# Appendix: Design Decision Records
 
 The decisions in this spec were reached through structured Socratic debates with multiple AI agent perspectives, then cross-validated to consensus. This appendix preserves the rationale.
 
@@ -12,19 +12,19 @@ The decisions in this spec were reached through structured Socratic debates with
 
 **Decision: No `card` keyword. Cards are templates with `kind: "card"` meta. Confidence: 88%.**
 
-Cards and templates are structurally identical — both have `ports` and `meta`. Adding a keyword is irreversible. If we later discover we need one, we can add `card` as syntactic sugar that desugars to a template (non-breaking). Removing a keyword is breaking.
+Cards and templates are structurally identical: both have `ports` and `meta`. Adding a keyword is irreversible. If we later discover we need one, we can add `card` as syntactic sugar that desugars to a template (non-breaking). Removing a keyword is breaking.
 
 ## Ring Member Syntax
 
 **Decision: Both explicit and implicit forms accepted. Emitter always emits explicit. Confidence: 82%.**
 
-Explicit form (`member Console.OptoCore_A`) is stable — if someone later adds a TWINLANe port to the Console template, the explicit form still resolves correctly. Implicit form (`member Console`) would break in that scenario.
+Explicit form (`member Console.OptoCore_A`) is stable: if someone later adds a TWINLANe port to the Console template, the explicit form still resolves correctly. Implicit form (`member Console`) would break in that scenario.
 
 ## Slot/Card Compatibility
 
 **Decision: Inverted model. Cards declare `fits`. Slots declare bay shape only. Confidence: 87%.**
 
-If each slot listed compatible cards, every new card type would require editing every template that has that slot type. The inverted model: adding a new card never requires editing existing templates.
+If each slot listed compatible cards, every new card type would require editing every template that has that slot type. The inverted model means adding a new card never requires editing existing templates.
 
 ## ID Separator
 
@@ -66,4 +66,4 @@ Simple and sufficient. If two files define `Splitter`, the compiler reports the 
 
 **Decision: Per-page version rows, not monolithic JSON blobs. Confidence: high.**
 
-Monolithic JSON blobs are the problem PatchLang was created to solve. Snapshots use a `PageVersion` table — each page's content in its own row. Diffing compares rows. Restoring updates pages individually.
+Monolithic JSON blobs are the problem PatchLang was created to solve. Snapshots use a `PageVersion` table: each page's content in its own row. Diffing compares rows. Restoring updates pages individually.
